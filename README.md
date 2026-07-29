@@ -2,7 +2,7 @@
 
 A Paradox-style spreadsheet game about the central bind of running a frontier AI lab: one fleet of GPUs, two jobs. Every H100e serving your shipped model is one not training the next one.
 
-**[▶ Play it here](https://timhwang.github.io/frontier-lab-tycoon/)**
+**[▶ Play it here](https://timhwang.github.io/frontier-lab-tycoon/)** — or deeplink an episode: [Episode 0 — The Trade](https://timhwang.github.io/frontier-lab-tycoon/?ep=0) · [Episode 1 — The Long Year](https://timhwang.github.io/frontier-lab-tycoon/?ep=1)
 
 ## Episode 0 — The Trade
 

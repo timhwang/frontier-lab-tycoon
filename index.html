@@ -962,9 +962,21 @@ function showModeSelect(allowCancel){
 function hideModeSelect(){
   $('modeoverlay').style.display = 'none';   // current game (or game-over screen) is untouched underneath; stays paused
 }
+function syncURL(){
+  // keep ?ep= in the address bar so the current episode is linkable/bookmarkable
+  try{ history.replaceState(null, '', location.pathname + '?ep=' + (MODE==='simple' ? 0 : 1)); }catch(e){}
+}
+function modeFromURL(){
+  try{
+    const q = (new URLSearchParams(location.search).get('ep') || location.hash.replace('#','')).toLowerCase();
+    if(['1','ep1','full','long-year'].includes(q)) return 'full';
+  }catch(e){}
+  return 'simple';
+}
 function startGame(mode){
   MODE = mode;
   $('modeoverlay').style.display = 'none';
+  syncURL();
   resetGame();                               // starts PAUSED — STEP through your first weeks, or press 1×
   let seen = false;
   try{ seen = !!localStorage.getItem(tutKey()); }catch(e){}
@@ -1026,10 +1038,11 @@ function closeTutorial(){
 }
 bindAlloc();
 window.tick = tick; window.resetGame = resetGame; window.startGame = startGame; window.startRun = startRun;   // debug handles
-MODE = 'simple';
-resetGame();                                  // land in Episode 0, paused at W0
+MODE = modeFromURL();                         // deeplinks: ?ep=0 (default) or ?ep=1
+syncURL();
+resetGame();                                  // paused at W0
 let tutSeen = false;
-try{ tutSeen = !!localStorage.getItem('flt_tutorial_seen'); }catch(e){}
+try{ tutSeen = !!localStorage.getItem(tutKey()); }catch(e){}
 if(!tutSeen) showTutorial();
 </script>
 </body>
