@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FRONTIER LAB TYCOON</title>
+<style>
+  :root{
+    --bg:#0b0e14; --panel:#10141d; --panel2:#0d1119; --border:#232a3a; --border2:#2e3850;
+    --txt:#c7d0e0; --dim:#7b8598; --faint:#4d5568;
+    --amber:#e8b04b; --good:#6fce8f; --bad:#e06c6c; --warn:#d9a441; --blue:#6ea8d8; --purple:#a98fd6;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg); color:var(--txt);
+    font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    font-size:12px; line-height:1.45; overflow-x:hidden;
+  }
+  #app{display:flex; flex-direction:column; height:100vh;}
+
+  /* ---------- top bar ---------- */
+  #topbar{
+    display:flex; align-items:center; gap:18px; flex-wrap:wrap;
+    background:linear-gradient(180deg,#141a27,#0e1220);
+    border-bottom:1px solid var(--border2); padding:6px 14px;
+  }
+  #title{font-weight:bold; color:var(--amber); letter-spacing:1px; white-space:nowrap;}
+  #title small{color:var(--dim); font-weight:normal; letter-spacing:0;}
+  .stat{white-space:nowrap;}
+  .stat .lbl{color:var(--dim); font-size:10px; text-transform:uppercase; letter-spacing:.5px; display:block;}
+  .stat .val{font-size:13px;}
+  #speed{margin-left:auto; display:flex; gap:4px;}
+  button{
+    background:#182034; color:var(--txt); border:1px solid var(--border2);
+    font:inherit; padding:3px 10px; cursor:pointer;
+  }
+  button:hover{background:#1f2a44;}
+  button.active{background:var(--amber); color:#131313; border-color:var(--amber); font-weight:bold;}
+  button:disabled{opacity:.4; cursor:default;}
+
+  /* ---------- layout ---------- */
+  #main{display:grid; grid-template-columns:300px 1fr 360px; gap:8px; padding:8px; flex:1; overflow:hidden; min-height:0;}
+  .col{display:flex; flex-direction:column; gap:8px; overflow-y:auto; min-height:0; min-width:0; padding-right:2px;}
+  @media (max-width:1100px){
+    #main{grid-template-columns:280px 1fr; grid-template-rows:1fr auto; overflow-y:auto;}
+    #col-right{grid-column:1 / -1;}
+    #col-right #logpanel{min-height:180px;}
+    #log{max-height:220px;}
+  }
+  @media (max-width:760px){
+    #main{grid-template-columns:1fr; overflow-y:auto;}
+    .col{overflow:visible;}
+  }
+  .panel{background:var(--panel); border:1px solid var(--border);}
+  .panel h3{
+    font-size:10px; letter-spacing:1.2px; text-transform:uppercase; color:var(--amber);
+    background:var(--panel2); border-bottom:1px solid var(--border); padding:4px 8px; font-weight:bold;
+  }
+  .panel .body{padding:6px 8px;}
+
+  table{width:100%; border-collapse:collapse;}
+  td,th{padding:1px 4px; vertical-align:top;}
+  td.num{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap;}
+  td.lbl{color:var(--dim); cursor:help;}
+  tr.total td{border-top:1px solid var(--border2); padding-top:3px; font-weight:bold;}
+  .pos{color:var(--good);} .neg{color:var(--bad);} .wrn{color:var(--warn);} .dm{color:var(--dim);}
+  .sep td{border-top:1px dotted var(--border); height:2px; padding:0;}
+
+  /* sliders */
+  .sliderrow{display:grid; grid-template-columns:78px 1fr 88px; gap:6px; align-items:center; margin:4px 0;}
+  .sliderrow .name{color:var(--dim); font-size:11px; cursor:help;}
+  .sliderrow .out{text-align:right; font-variant-numeric:tabular-nums; font-size:11px;}
+  input[type=range]{width:100%; accent-color:var(--amber); height:14px;}
+
+  .bar{height:10px; background:#1a2132; border:1px solid var(--border2); position:relative; margin:3px 0;}
+  .bar .fill{height:100%; background:var(--amber);}
+  .bar.morale .fill{background:var(--good);}
+  .bar .marker{position:absolute; top:-2px; bottom:-2px; width:1px; background:var(--bad);}
+
+  /* event log */
+  #log{overflow-y:auto; flex:1; min-height:120px; padding:4px 8px; display:flex; flex-direction:column-reverse;}
+  #log .e{margin:1px 0; border-bottom:1px dotted #1c2333; padding-bottom:1px;}
+  #log .w{color:var(--faint); margin-right:6px;}
+  .e.good{color:var(--good);} .e.bad{color:var(--bad);} .e.warn{color:var(--warn);} .e.info{color:var(--txt);} .e.sys{color:var(--purple);}
+  #logpanel{display:flex; flex-direction:column; flex:1; min-height:200px;}
+
+  /* decisions */
+  .decision{border:1px solid var(--warn); background:#1a1610; margin:6px 8px; padding:8px;}
+  .decision h4{color:var(--warn); font-size:12px; margin-bottom:4px;}
+  .decision p{color:var(--txt); margin-bottom:8px; font-size:11px;}
+  .decision .opts{display:flex; gap:6px; flex-wrap:wrap;}
+  .decision button{border-color:var(--warn);}
+
+  canvas.spark{width:100%; height:54px; display:block; background:var(--panel2); border:1px solid var(--border);}
+  .sparklbl{font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:.5px; margin-top:6px;}
+
+  #overlay{
+    position:fixed; inset:0; background:rgba(5,7,12,.88); display:none;
+    align-items:center; justify-content:center; z-index:50;
+  }
+  #overlay .box{background:var(--panel); border:2px solid var(--amber); max-width:560px; padding:24px; text-align:center;}
+  #overlay h2{color:var(--amber); letter-spacing:2px; margin-bottom:10px;}
+  #overlay .box.lost{border-color:var(--bad);} #overlay .box.lost h2{color:var(--bad);}
+  #overlay p{margin-bottom:8px; color:var(--txt);}
+  #overlay .score{font-size:16px; color:var(--good); margin:12px 0;}
+
+  details{margin:0 8px 8px;}
+  summary{color:var(--dim); cursor:pointer; font-size:10px; text-transform:uppercase; letter-spacing:1px; padding:2px 0;}
+  details .manual{color:var(--dim); font-size:11px; padding:4px 0;}
+  details .manual b{color:var(--txt);}
+  abbr{cursor:help; text-decoration:none; border-bottom:1px dotted var(--faint);}
+
+  /* simple mode hides the full economy; .simple-only elements exist only in Ep.0 */
+  body.simple .full-only{display:none !important;}
+  body:not(.simple) .simple-only{display:none !important;}
+
+  /* Ep.0 hazard cards (visual lose conditions) */
+  #hazards{display:flex; gap:6px; margin-top:6px;}
+  .hazard{flex:1; border:1px solid var(--border2); background:var(--panel2); padding:5px 7px; cursor:help;}
+  .hazard .hlbl{font-size:9px; letter-spacing:.8px; color:var(--dim); text-transform:uppercase; margin-bottom:4px;}
+  .hazard .hval{font-size:11px; margin-top:4px; font-variant-numeric:tabular-nums;}
+  .pips{display:flex; gap:3px;}
+  .pip{flex:1; height:9px; background:#1a2132; border:1px solid var(--border2);}
+  .pip.on{background:var(--bad); border-color:var(--bad);}
+  #obj-timeline{position:relative; margin-top:6px;}
+  #tl-eta{position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--amber);}
+
+  #modeoverlay{position:fixed; inset:0; background:rgba(5,7,12,.94); display:none; align-items:center; justify-content:center; z-index:60;}
+  #modeoverlay .box{background:var(--panel); border:2px solid var(--amber); max-width:640px; padding:22px;}
+  #modeoverlay h2{color:var(--amber); letter-spacing:2px; text-align:center; margin-bottom:2px;}
+  #modeoverlay .sub{color:var(--dim); text-align:center; margin-bottom:14px; font-size:11px; text-transform:uppercase; letter-spacing:1px;}
+  .modecard{border:1px solid var(--border2); background:var(--panel2); padding:10px 12px; margin:8px 0; cursor:pointer;}
+  .modecard:hover{border-color:var(--amber); background:#161c2c;}
+  .modecard h4{color:var(--amber); font-size:12px; letter-spacing:1px; margin-bottom:4px;}
+  .modecard p{color:var(--dim); font-size:11px; margin:0;}
+
+  #tutoverlay{position:fixed; inset:0; background:rgba(5,7,12,.94); display:none; align-items:center; justify-content:center; z-index:70;}
+  #tutoverlay .box{background:var(--panel); border:2px solid var(--amber); max-width:560px; padding:22px;}
+  #tutoverlay h2{color:var(--amber); letter-spacing:2px; text-align:center; margin-bottom:2px;}
+  #tutoverlay .sub{color:var(--dim); text-align:center; margin-bottom:12px; font-size:11px; text-transform:uppercase; letter-spacing:1px;}
+  #tut-body{font-size:12px; line-height:1.65; color:var(--txt); min-height:120px;}
+  #tut-body b{color:var(--amber);}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div id="title">FRONTIER LAB TYCOON <small id="subtitle">· EP.1 — THE ALLOCATION PROBLEM</small></div>
+    <div class="stat"><span class="lbl">Date</span><span class="val" id="t-date">—</span></div>
+    <div class="stat"><span class="lbl">Cash</span><span class="val" id="t-cash">—</span></div>
+    <div class="stat"><span class="lbl">Weekly Net</span><span class="val" id="t-net">—</span></div>
+    <div class="stat"><span class="lbl">Compute</span><span class="val" id="t-compute">—</span></div>
+    <div class="stat full-only"><span class="lbl">Morale</span><span class="val" id="t-morale">—</span></div>
+    <div class="stat"><span class="lbl">Cap. vs best rival</span><span class="val" id="t-lead">—</span></div>
+    <div id="speed">
+      <button id="sp-pause" onclick="setSpeed(0)">⏸ PAUSE</button>
+      <button id="sp-step" onclick="stepOnce()">STEP ▸</button>
+      <button id="sp-1" onclick="setSpeed(1)">▸ 1×</button>
+      <button onclick="showModeSelect(true)" title="Start a new game">⟲ NEW</button>
+      <button onclick="showTutorial()" title="Replay the tutorial">? HELP</button>
+    </div>
+  </div>
+
+  <div id="main">
+    <!-- ============ LEFT ============ -->
+    <div class="col">
+      <div class="panel">
+        <h3>Compute Allocation</h3>
+        <div class="body">
+          <div class="sliderrow">
+            <span class="name" title="Serves product traffic. Capacity(T tok/wk) = H100e × 0.001 × serving efficiency.">INFERENCE</span>
+            <input type="range" id="al-inf" min="0" max="100" value="55">
+            <span class="out" id="al-inf-out"></span>
+          </div>
+          <div class="sliderrow">
+            <span class="name" id="al-train-name" title="Feeds the ATLAS-2 run. Progress/wk = H100e × algo efficiency × morale factor × (1 − senior-departure penalty).">TRAINING</span>
+            <input type="range" id="al-train" min="0" max="100" value="35">
+            <span class="out" id="al-train-out"></span>
+          </div>
+          <div class="sliderrow full-only">
+            <span class="name" title="Ablations & experiments. Accumulates insights → raises algorithmic efficiency, lowers loss-spike risk, keeps researchers sane, improves the eventual ATLAS-2 quality jump.">RESEARCH</span>
+            <input type="range" id="al-res" min="0" max="100" value="10">
+            <span class="out" id="al-res-out"></span>
+          </div>
+          <div class="dm" id="al-note" style="font-size:10px; margin-top:2px;"></div>
+        </div>
+      </div>
+
+      <div class="panel full-only">
+        <h3>Policy</h3>
+        <div class="body">
+          <div class="sliderrow">
+            <span class="name" title="Blended $/1M tokens across API + subscriptions. Lower price → faster demand growth, less revenue per token served.">PRICE $/Mtok</span>
+            <input type="range" id="pol-price" min="1" max="8" step="0.25" value="4">
+            <span class="out" id="pol-price-out"></span>
+          </div>
+          <div class="sliderrow">
+            <span class="name" title="Payroll multiplier vs market rate. Above 1.0 lifts morale and resists poaching; costs real money every week.">COMP ×MKT</span>
+            <input type="range" id="pol-comp" min="0.85" max="1.4" step="0.05" value="1">
+            <span class="out" id="pol-comp-out"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Compute Fleet</h3>
+        <div class="body">
+          <table>
+            <tr><td class="lbl" title="Datacenter GPUs you own. Opex $300/wk per H100e.">Owned H100e</td><td class="num" id="f-owned"></td></tr>
+            <tr class="full-only"><td class="lbl" title="Cloud capacity under lease. $550/wk per H100e, 26-week terms.">Leased H100e</td><td class="num" id="f-leased"></td></tr>
+            <tr class="total"><td class="lbl">Total fleet</td><td class="num" id="f-total"></td></tr>
+          </table>
+          <div id="f-incoming" class="dm full-only" style="margin-top:4px; font-size:11px;"></div>
+          <button id="btn-lease" class="full-only" style="width:100%; margin-top:6px;" onclick="orderLease()"
+            title="Order 5,000 leased H100e. 6-week provisioning lead time, 26-week term, $2.75M/wk once live. Provider capacity is finite: max 15,000 leased at once.">
+            LEASE +5,000 H100e (6wk lead)</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Trends</h3>
+        <div class="body">
+          <div class="sparklbl">Revenue $M/wk</div><canvas class="spark" id="ch-rev"></canvas>
+          <div class="sparklbl">Demand (amber) vs Capacity (blue), T tok/wk</div><canvas class="spark" id="ch-dem"></canvas>
+          <div class="full-only"><div class="sparklbl">Researcher morale</div><canvas class="spark" id="ch-mor"></canvas></div>
+          <div class="sparklbl">Cash $M</div><canvas class="spark" id="ch-cash"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ CENTER ============ -->
+    <div class="col">
+      <div class="panel simple-only">
+        <h3>Objective — When The Game Ends</h3>
+        <div class="body">
+          <div id="obj-body" style="font-size:11px;"></div>
+          <div class="bar" id="obj-timeline" title="H1 timeline — the game ends at W26 no matter what. Amber marker = projected ship week (green once shipped).">
+            <div class="fill" id="tl-fill"></div><div id="tl-eta"></div>
+          </div>
+          <div id="hazards">
+            <div class="hazard" title="Game over the week cash reaches $0.">
+              <div class="hlbl">Insolvency</div>
+              <div class="bar"><div class="fill" id="hz-cash-bar"></div></div>
+              <div class="hval" id="hz-cash-val"></div>
+            </div>
+            <div class="hazard" title="Game over after 6 consecutive weeks more than 15 capability points behind the best rival. Each pip is a week on the clock.">
+              <div class="hlbl">Frontier Gap</div>
+              <div class="pips" id="hz-gap-pips"><div class="pip"></div><div class="pip"></div><div class="pip"></div><div class="pip"></div><div class="pip"></div><div class="pip"></div></div>
+              <div class="hval" id="hz-gap-val"></div>
+            </div>
+            <div class="hazard" title="Game over after 4 consecutive rate-limited weeks (utilization above 97%). Each pip is a week in the current streak.">
+              <div class="hlbl">Rate Limits</div>
+              <div class="pips" id="hz-rl-pips"><div class="pip"></div><div class="pip"></div><div class="pip"></div><div class="pip"></div></div>
+              <div class="hval" id="hz-rl-val"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Product &amp; Serving — ATLAS-1</h3>
+        <div class="body">
+          <table>
+            <tr><td class="lbl" title="What the market wants from you this week. Grows with capability lead and low prices; shrinks when you rate-limit.">Token demand</td><td class="num" id="p-demand"></td>
+                <td class="lbl" title="Inference H100e × 0.001 T × serving efficiency.">Serving capacity</td><td class="num" id="p-capacity"></td></tr>
+            <tr><td class="lbl" title="Served / demand. Above ~97% you are rate-limiting: growth penalty + 30% of overflow (45% during a launch surge) churns to rivals permanently.">Utilization</td><td class="num" id="p-util"></td>
+                <td class="lbl" title="Demand you turned away this week (rate limits, queue timeouts, 529s).">Rate-limited</td><td class="num" id="p-overflow"></td></tr>
+            <tr><td class="lbl">Revenue</td><td class="num" id="p-rev"></td>
+                <td class="lbl">Demand growth</td><td class="num" id="p-growth"></td></tr>
+            <tr class="full-only"><td class="lbl">Tokens served</td><td class="num" id="p-served"></td>
+                <td class="lbl" id="p-eff-lbl" title="Serving-stack efficiency. Improved by kernel/speculative-decoding breakthroughs (needs research allocation).">Serving eff.</td><td class="num" id="p-eff"></td></tr>
+          </table>
+          <div id="p-warn" class="wrn" style="font-size:11px;"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3 id="tr-title">Training Run — ATLAS-2</h3>
+        <div class="body">
+          <div class="bar"><div class="fill" id="tr-bar" style="width:0%"></div></div>
+          <table>
+            <tr><td class="lbl">Progress</td><td class="num" id="tr-prog"></td>
+                <td class="lbl" id="tr-eta-lbl" title="At current allocation, efficiency and morale.">ETA</td><td class="num" id="tr-eta"></td></tr>
+            <tr><td class="lbl" title="Effective H100e-weeks per week going into the run.">Effective rate</td><td class="num" id="tr-rate"></td>
+                <td class="lbl">Run status</td><td class="num" id="tr-status"></td></tr>
+            <tr><td class="lbl" id="tr-payoff-lbl" title="Capability jump when ATLAS-2 ships.">Ship payoff</td><td class="num" id="tr-payoff"></td>
+                <td class="lbl" title="Projected capability lead the moment the run finishes: (you + payoff) − (best rival + ~0.7/wk × ETA). Rival launch jumps can undercut this.">Lead at ship (proj.)</td><td class="num" id="tr-proj"></td></tr>
+            <tr class="full-only"><td class="lbl" title="1 + 0.6×(1−e^(−insights/45k)). Earned by research allocation.">Algo efficiency</td><td class="num" id="tr-algo"></td>
+                <td class="lbl" title="0.75 at morale 0 → 1.25 at morale 100. Tired, angry researchers write bugs and restart runs.">Morale factor</td><td class="num" id="tr-mor"></td></tr>
+            <tr class="full-only"><td class="lbl" title="Weekly chance of a loss spike / divergence that destroys 2–4 weeks of progress. Reduced by accumulated insights.">Divergence risk</td><td class="num" id="tr-div"></td>
+                <td class="lbl" title="Each senior departure permanently cuts training throughput 3%.">Departure penalty</td><td class="num" id="tr-pen"></td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel full-only">
+        <h3>Research</h3>
+        <div class="body">
+          <table>
+            <tr><td class="lbl" title="Cumulative experiment H100e-weeks.">Insights bank</td><td class="num" id="r-ins"></td>
+                <td class="lbl" title="Applied to every training H100e-week.">Efficiency mult</td><td class="num" id="r-eff"></td></tr>
+            <tr><td class="lbl" title="Extra capability points ATLAS-2 gets at ship: +insights/25k.">Ship bonus</td><td class="num" id="r-bonus"></td>
+                <td class="lbl">Headcount (research)</td><td class="num" id="r-heads"></td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Finance Ledger — $M / week</h3>
+        <div class="body">
+          <table>
+            <tr><td class="lbl">Product revenue</td><td class="num" id="fin-rev"></td></tr>
+            <tr id="fin-ent-row" style="display:none"><td class="lbl" title="Guaranteed capacity contract. Requires ≥4,000 H100e on inference at all times.">Enterprise contract</td><td class="num" id="fin-ent"></td></tr>
+            <tr class="sep"><td colspan="2"></td></tr>
+            <tr class="simple-only"><td class="lbl" title="Payroll + datacenter + serving costs, lumped. The slider barely moves these — watch Net and Cash.">Operating costs</td><td class="num neg" id="fin-costs"></td></tr>
+            <tr class="full-only"><td class="lbl" title="Non-GPU cost of serving: bandwidth, storage, support, trust &amp; safety. $0.80 per 1M tokens served.">Serving COGS</td><td class="num neg" id="fin-cogs"></td></tr>
+            <tr class="full-only"><td class="lbl" id="fin-pay-lbl" title="Researchers ×$650k/yr + staff ×$400k/yr, × comp multiplier.">Payroll</td><td class="num neg" id="fin-pay"></td></tr>
+            <tr class="full-only"><td class="lbl" title="$300/wk per owned H100e (power, cooling, DC staff, depreciation).">Datacenter opex</td><td class="num neg" id="fin-dc"></td></tr>
+            <tr class="full-only"><td class="lbl" title="$550/wk per leased H100e.">Cloud leases</td><td class="num neg" id="fin-lease"></td></tr>
+            <tr class="full-only"><td class="lbl" title="Legal, safety evals, offices, everything else.">Other opex</td><td class="num neg" id="fin-other"></td></tr>
+            <tr class="total"><td class="lbl">Net</td><td class="num" id="fin-net"></td></tr>
+            <tr><td class="lbl">Cash</td><td class="num" id="fin-cash"></td></tr>
+            <tr><td class="lbl" title="Weeks of cash at current net burn. ∞ if profitable.">Runway</td><td class="num" id="fin-run"></td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Competitive Landscape</h3>
+        <div class="body">
+          <table id="rivals">
+            <tr><th style="text-align:left;color:var(--dim);font-size:10px;">LAB</th>
+                <th style="text-align:right;color:var(--dim);font-size:10px;" title="Abstract frontier-capability index (think blended evals + vibes).">CAPABILITY</th>
+                <th style="text-align:right;color:var(--dim);font-size:10px;">Δ vs YOU</th>
+                <th style="text-align:right;color:var(--dim);font-size:10px;">LAST SHIP</th></tr>
+          </table>
+          <div class="dm" id="obs-warn" style="font-size:11px;"></div>
+        </div>
+      </div>
+
+      <div class="panel full-only">
+        <h3>Staff</h3>
+        <div class="body">
+          <table>
+            <tr><td class="lbl">Researchers</td><td class="num" id="s-res"></td>
+                <td class="lbl">Staff (eng/ops/GTM)</td><td class="num" id="s-staff"></td></tr>
+            <tr><td class="lbl" title="Below 45: weekly resignation risk. Below 25 for 5 straight weeks: mass exodus, game over.">Morale</td>
+                <td class="num" id="s-mor"></td>
+                <td class="lbl">Departures to date</td><td class="num" id="s-dep"></td></tr>
+          </table>
+          <div class="bar morale"><div class="fill" id="s-morbar"></div><div class="marker" style="left:45%"></div></div>
+          <div class="dm" id="s-note" style="font-size:11px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ RIGHT ============ -->
+    <div class="col" id="col-right">
+      <div class="panel" id="logpanel">
+        <h3>Operations Log</h3>
+        <div id="decisions"></div>
+        <div id="log"></div>
+        <details>
+          <summary>Manual — how this economy works</summary>
+          <div class="manual">
+            <b>Modes (⟲ NEW):</b> Episode 0 is the pure two-way trade — no research, morale, or leases; one slider, a fixed 26-week H1, a guaranteed +20 on ship, and random spikes in both your traffic and rival capability. Its lose rules are tighter: 4 straight rate-limited weeks, or 15+ behind the frontier for 6 weeks. Everything below describes the full Episode 1 economy.<br><br>
+            <b>The bind:</b> one fleet, three mouths. <b>Inference</b> earns revenue now; every H100e there is one not training ATLAS-2. <b>Training</b> is your future — rivals improve ~0.7 capability/wk and ship jumps; fall &gt;22 behind for 10 weeks and users evaporate (acquisition, game over). <b>Research</b> looks like waste until you notice it multiplies every training FLOP, cuts divergence risk, and is the main thing keeping researchers from quitting.<br><br>
+            <b>Serving:</b> demand &gt; capacity ⇒ rate limits ⇒ growth penalty and 30% of unmet demand churns to rivals permanently. Watch utilization like a hawk near launches.<br><br>
+            <b>Morale:</b> researchers want training + research share, comp above market, and a capability lead. Below 45 they start resigning (each senior loss −3% training throughput, forever). Below 25 for 5 weeks = mass exodus.<br><br>
+            <b>Win:</b> ship ATLAS-2, then <i>serve</i> the launch: demand jumps at ship and burns hot for ~6 weeks, and you must hold service through the full 8-week launch window — rate-limit 4 of those weeks and the launch flops. (Episode 0 has no flop counter; instead, 4 consecutive rate-limited weeks at any point is game over, and the episode always ends at W26.) During the surge, churn doubles down: 45% of unmet demand leaves for good (vs 30% normally). Plan capacity before you ship; leases take 6 weeks. When the run finishes, its compute frees up — reallocate it immediately. <b>Lose:</b> insolvency, exodus, obsolescence, or a pyrrhic launch.
+          </div>
+        </details>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="tutoverlay"><div class="box">
+  <h2>FRONTIER LAB TYCOON</h2>
+  <div class="sub" id="tut-step-label"></div>
+  <div id="tut-body"></div>
+  <div style="display:flex; gap:6px; margin-top:14px;">
+    <button id="tut-back" onclick="tutStep(-1)">◂ BACK</button>
+    <button id="tut-next" onclick="tutStep(1)">NEXT ▸</button>
+    <button onclick="closeTutorial()" style="margin-left:auto;">SKIP — JUST PLAY</button>
+  </div>
+</div></div>
+
+<div id="modeoverlay"><div class="box">
+  <h2>FRONTIER LAB TYCOON</h2>
+  <div class="sub">start a new game</div>
+  <div class="modecard" tabindex="0" role="button" onkeydown="if(event.key==='Enter')this.click()" onclick="startGame('simple')">
+    <h4>EPISODE 0 — THE TRADE</h4>
+    <p>The core bind, nothing else. One slider: every H100e serving ATLAS-1 customers is one not training ATLAS-2, which pays a guaranteed +20 capability on ship. Fixed fleet, no morale, no leases. Ship it and hold service until H1 ends (W26) — through traffic spikes and rival breakthroughs that arrive without warning. Four straight rate-limited weeks is game over.</p>
+  </div>
+  <!-- Episode 1 hidden for the public build — startGame('full') from the console still works -->
+  <div class="modecard" style="display:none;" tabindex="0" role="button" onkeydown="if(event.key==='Enter')this.click()" onclick="startGame('full')">
+    <h4>EPISODE 1 — THE ALLOCATION PROBLEM</h4>
+    <p>The full economy: research and algorithmic efficiency, morale and attrition, loss spikes, cloud leases, poaching raids, random events, price and comp policy.</p>
+  </div>
+  <button id="mode-cancel" style="width:100%; margin-top:8px;" onclick="hideModeSelect()">CANCEL — KEEP CURRENT GAME</button>
+</div></div>
+
+<div id="overlay"><div class="box" id="ov-box">
+  <h2 id="ov-title"></h2><div id="ov-body"></div>
+  <div class="score" id="ov-score"></div>
+  <button id="ov-restart" onclick="startGame(MODE)">RESTART</button>
+</div></div>
+
+<script>
+'use strict';
+// ============================================================ state
+const NAMES = ['Okafor','Lindqvist','Sato','Ferrante','Novak','Achterberg','Reyes','Duplessis','Wang','Iyer',
+  'Kowalczyk','Braithwaite','Almeida','Sorokin','Tanaka','Nkemelu','Vasquez','Oyelaran','Petrov','Halvorsen',
+  'DeWitt','Mbeki','Castellanos','Yamamoto'];
+
+let MODE = 'full';   // 'simple' = Episode 0 (product vs training only), 'full' = Episode 1
+function initState(){ return {
+  mode: MODE,
+  week: 0, gameOver: false,
+  cash: 1600,                       // $M
+  owned: 30000, leased: 0,          // H100e
+  leaseOrders: [],                  // {lead, amt}
+  leases: [],                       // {amt, termLeft}
+  alloc: MODE==='simple' ? {inf:.60, train:.40, res:0} : {inf:.55, train:.35, res:.10},
+  price: 4.0, comp: 1.0,
+  researchers: 420, staff: 900,
+  morale: 68, departures: 0, seniorLoss: 0,
+  demand: 12.0,                     // T tokens/wk
+  infEff: 1.0,
+  quality: 62,
+  insights: 0,
+  progress: 0, req: MODE==='simple' ? 220000 : 420000,   // effective H100e-weeks; Ep.0 run is smaller
+  shipped: false, shipWeek: 0, surgeWeeks: 0, postShip: 0, surgeFail: 0,
+  pressMalus: 0, outage: 0, rlStreak: 0,
+  moraleStreak: 0, obsStreak: 0,
+  enterprise: false, entWeeks: 0, entOffered: false,
+  raiseOffered: false, bridgeUsed: false,
+  lastNet: 0, lastGrowth: 0, lastRate: 0, lastDivP: 0, lastServed: 0, lastCapacity: 0, lastOverflow: 0, lastRevenue: 0, lastChurn: 0,
+  eventCooldown: 0,
+  rivals: [
+    {name:'Menlo Research', q:60, timer:20, lastShip:'—'},
+    {name:'Axiom AI',       q:56, timer:30, lastShip:'—'},
+    {name:'Tengri Compute', q:52, timer:26, lastShip:'—'},
+  ],
+  deliveries: MODE==='simple' ? {} :
+              {16:{amt:6000,label:'Contracted H100e tranche energized'},
+               32:{amt:12000,label:'Site B datacenter comes online'}},
+  hist: {rev:[], dem:[], cap:[], mor:[], cash:[]},
+  pending: [],
+}; }
+let S = initState();
+let timer = null, speed = 0;
+
+// ============================================================ helpers
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const rnd = () => Math.random();
+const gauss = (m, s) => m + (rnd()+rnd()+rnd()-1.5)/1.5*2*s;
+const fmtK = n => Math.round(n).toLocaleString('en-US');
+const fmtM = n => {
+  const sign = n<0 ? '−' : ''; n = Math.abs(n);
+  return sign + (n>=1000 ? '$'+(n/1000).toFixed(2)+'B' : '$'+n.toFixed(1)+'M');
+};
+const fmtT = n => n.toFixed(2)+'T';
+const pct = n => (n*100).toFixed(1)+'%';
+function dateStr(w){
+  const d = new Date(2027,0,4); d.setDate(d.getDate()+w*7);
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+function log(cls, msg){
+  const e = document.createElement('div');
+  e.className = 'e '+cls;
+  e.innerHTML = '<span class="w">W'+String(S.week).padStart(2,'0')+'</span>'+msg;
+  $('log').prepend(e);
+  while($('log').children.length > 220) $('log').lastChild.remove();
+}
+
+// ============================================================ decisions
+function pushDecision(d){ S.pending.push(d); pauseForDecision(); renderDecisions(); }
+function pauseForDecision(){ if(speed>0){ const s = speed; setSpeed(0); S.resumeSpeed = s; } }
+function renderDecisions(){
+  const box = $('decisions'); box.innerHTML = '';
+  if(!S.pending.length) return;
+  const d = S.pending[0];
+  const el = document.createElement('div');
+  el.className = 'decision';
+  el.innerHTML = '<h4>⚠ DECISION — '+d.title+'</h4><p>'+d.body+'</p>';
+  const opts = document.createElement('div'); opts.className = 'opts';
+  d.options.forEach(o=>{
+    const b = document.createElement('button');
+    b.textContent = o.label;
+    b.onclick = ()=>{ S.pending.shift(); o.fn(); renderDecisions(); render();
+      // resume only if the player didn't touch the speed controls while the card was open
+      // (any manual setSpeed clears S.resumeSpeed)
+      const rs = S.resumeSpeed; S.resumeSpeed = 0;
+      if(!S.pending.length && rs) setSpeed(rs); };
+    opts.appendChild(b);
+  });
+  el.appendChild(opts); box.appendChild(el);
+}
+
+// ============================================================ actions
+const LEASE_CAP = 15000;
+function leasedAndPending(){ return S.leased + S.leaseOrders.reduce((a,o)=>a+o.amt,0); }
+function orderLease(){
+  if(S.gameOver) return;
+  if(leasedAndPending() + 5000 > LEASE_CAP){
+    log('warn','Cloud provider: "No H100 capacity available this quarter." Lease market is sold out (cap 15,000).');
+    render(); return;
+  }
+  S.leaseOrders.push({lead:6, amt:5000});
+  log('info','Lease order signed: +5,000 H100e cloud capacity, live in 6 weeks ($2.75M/wk, 26-wk term).');
+  render();
+}
+
+// ============================================================ presentation interpolation
+// The sim ticks weekly; the display lerps between ticks so it feels continuous (RTS-style).
+// NOTE: driven by setInterval, not requestAnimationFrame — rAF is suspended when the page
+// is embedded/backgrounded (e.g. IDE preview panes), while timers keep firing.
+let anim = null, animTimer = null;
+const lerp = (p,c,a)=>p+(c-p)*a;
+function snapshotView(){
+  return {week:S.week, cash:S.cash, demand:S.demand, cap:S.lastCapacity, rev:S.lastRevenue, prog:S.progress, morale:S.morale};
+}
+function killAnim(){
+  if(animTimer){ clearInterval(animTimer); animTimer = null; }
+  if(anim){ lerpApply(1); anim = null; }
+}
+function startAnim(prev){
+  killAnim();
+  anim = {prev, start: performance.now(), dur: speed===1 ? 2950 : 550};
+  lerpApply(0);
+  animTimer = setInterval(animStep, 33);
+}
+function animStep(){
+  if(!anim){ clearInterval(animTimer); animTimer = null; return; }
+  const a = Math.min(1, (performance.now()-anim.start)/anim.dur);
+  lerpApply(a);
+  if(a>=1){ clearInterval(animTimer); animTimer = null; anim = null; }
+}
+function dateStrDay(weekFloat){
+  const d = new Date(2027,0,4); d.setDate(d.getDate()+Math.round(weekFloat*7));
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+function lerpApply(a){
+  if(!anim) return;
+  const p = anim.prev;
+  const wf = lerp(p.week, S.week, a);
+  const cash = lerp(p.cash, S.cash, a);
+  $('t-date').textContent = 'W'+S.week+' · '+dateStrDay(wf);
+  $('t-cash').textContent = fmtM(cash);
+  $('fin-cash').textContent = fmtM(cash);
+  $('p-demand').textContent = fmtT(lerp(p.demand, S.demand, a))+' tok/wk';
+  $('p-capacity').textContent = fmtT(lerp(p.cap, S.lastCapacity, a))+' tok/wk';
+  $('p-rev').textContent = fmtM(lerp(p.rev, S.lastRevenue, a))+'/wk';
+  if(!S.shipped){
+    const pr = lerp(p.prog, S.progress, a);
+    $('tr-bar').style.width = (Math.min(1, pr/S.req)*100).toFixed(2)+'%';
+    $('tr-prog').textContent = fmtK(pr)+' / '+fmtK(S.req)+' ('+(Math.min(1, pr/S.req)*100).toFixed(1)+'%)';
+  }
+  if(S.mode==='simple'){
+    $('tl-fill').style.width = Math.min(100, wf/Q_END*100)+'%';
+    $('hz-cash-bar').style.width = Math.max(0, Math.min(100, cash/1600*100))+'%';
+    $('hz-cash-val').textContent = fmtM(cash);
+  } else {
+    $('s-morbar').style.width = lerp(p.morale, S.morale, a)+'%';
+    $('t-morale').textContent = lerp(p.morale, S.morale, a).toFixed(0)+' / 100';
+  }
+}
+
+// ============================================================ core tick
+function tick(){
+  if(S.gameOver || S.pending.length) return;
+  const prevView = snapshotView();
+  S.week++;
+
+  // -------- fleet: deliveries, lease arrivals/expiries
+  const del = S.deliveries[S.week];
+  if(del){ S.owned += del.amt; log('good', del.label+': +'+fmtK(del.amt)+' H100e (owned).'); }
+  S.leaseOrders.forEach(o=>o.lead--);
+  S.leaseOrders.filter(o=>o.lead<=0).forEach(o=>{
+    S.leases.push({amt:o.amt, termLeft:26});
+    log('good','Leased capacity live: +'+fmtK(o.amt)+' H100e.');
+  });
+  S.leaseOrders = S.leaseOrders.filter(o=>o.lead>0);
+  S.leases.forEach(l=>l.termLeft--);
+  S.leases.filter(l=>l.termLeft<=0).forEach(l=>log('warn','Lease term expired: −'+fmtK(l.amt)+' H100e returned to provider.'));
+  S.leases = S.leases.filter(l=>l.termLeft>0);
+  S.leased = S.leases.reduce((a,l)=>a+l.amt,0);
+
+  const fleet = S.owned + S.leased;
+
+  // -------- allocation (enterprise contract can force inference floor)
+  let infC = fleet*S.alloc.inf, trainC = fleet*S.alloc.train, resC = fleet*S.alloc.res;
+  if(S.enterprise && infC < 4000){
+    let need = 4000 - infC;
+    const fromTrain = Math.min(need, trainC); trainC -= fromTrain; need -= fromTrain;
+    const fromRes = Math.min(need, resC); resC -= fromRes; need -= fromRes;
+    infC = 4000 - need;
+    if(fromTrain+fromRes > 100) log('warn','Enterprise SLA forced '+fmtK(fromTrain+fromRes)+' H100e from training/research onto inference.');
+  }
+
+  // -------- research
+  S.insights += resC;
+  const algoEff = 1 + 0.6*(1 - Math.exp(-S.insights/45000));
+  S.quality += S.mode==='simple' ? 0.08 : (resC > 500 ? 0.15 : 0.05);   // post-training polish
+
+  // -------- training
+  let rate = 0, divP = 0;
+  if(!S.shipped){
+    const mf = S.mode==='simple' ? 1.0 : 0.75 + S.morale*0.005;
+    rate = trainC * algoEff * mf * Math.max(0.4, 1 - S.seniorLoss*0.03);
+    divP = (S.mode!=='simple' && trainC>0) ? 0.055*(1 + trainC/60000)*(1 - Math.min(S.insights/70000, 0.65)) : 0;
+    if(S.outage>0) rate *= 0.92;
+    if(trainC>0 && rnd() < divP){
+      const lost = rate*(2+rnd()*2);
+      S.progress = Math.max(0, S.progress - lost);
+      S.morale -= 4;
+      log('bad','LOSS SPIKE on ATLAS-2 — run diverged. Rolled back to last good checkpoint: −'+fmtK(lost)+' effective H100e-wk (~'+(lost/Math.max(rate,1)).toFixed(1)+' weeks).');
+    } else {
+      S.progress += rate;
+    }
+    if(S.progress >= S.req) shipModel();
+  }
+  S.lastRate = rate; S.lastDivP = divP;
+
+  // -------- rivals (Ep.0: fixed drift and ship schedule, so the run really is deterministic)
+  S.rivals.forEach(r=>{
+    r.q += S.mode==='simple' ? 0.7 : Math.max(0, gauss(0.65, 0.35));
+    r.timer--;
+    if(r.timer<=0){
+      const jump = S.mode==='simple' ? 5.5 : 3.5 + rnd()*4.5;
+      r.q += jump; r.timer = S.mode==='simple' ? 24 : 18 + Math.floor(rnd()*14); r.lastShip = 'W'+S.week;
+      log('warn', r.name.toUpperCase()+' ships a new frontier model (capability '+r.q.toFixed(0)+').');
+      if(r.q > S.quality){
+        S.demand *= 0.93;
+        log('bad','Benchmark threads everywhere. You are no longer clearly ahead — demand −7%.');
+        if(S.mode!=='simple') maybePoach(r);
+      }
+    }
+  });
+  const bestRival = Math.max(...S.rivals.map(r=>r.q));
+
+  // -------- product & serving
+  let capacity = infC * 0.001 * S.infEff;
+  if(S.outage>0){ capacity *= 0.92; S.outage--; if(S.outage===0) log('info','Cluster repairs complete; serving capacity restored.'); }
+  const served = Math.min(S.demand, capacity);
+  const overflow = S.demand - served;
+  const util = capacity>0 ? S.demand/capacity : 99;
+
+  let growth = 0.035
+    + clamp((S.quality - bestRival)*0.004, -0.03, 0.035)
+    + 0.02*(4 - S.price)/4;
+  if(S.pressMalus>0){ growth -= 0.02; S.pressMalus--; }
+  const surging = S.surgeWeeks>0;
+  if(surging){ growth += (S.mode==='simple' ? 0.04 : 0.07); S.surgeWeeks--; }
+  if(util > 0.97){
+    growth -= 0.035;
+    S.lastChurn = overflow*(surging ? 0.45 : 0.30);
+    S.demand -= S.lastChurn;
+    S.rlStreak++;
+    if(S.rlStreak===2) log('warn','Sustained rate-limiting. "Is ATLAS down again?" is trending. Users churning to rivals.');
+    if(S.rlStreak===5 && S.pressMalus===0){ S.pressMalus = 4; log('bad','Longform press piece: "The AI Lab That Can\'t Keep the Lights On." Growth −2%/wk for 4 weeks.'); }
+  } else { S.rlStreak = 0; S.lastChurn = 0; }
+  S.demand = Math.max(0.5, S.demand*(1+growth));
+  if(S.mode==='simple') S.demand = Math.min(S.demand, EP0_MARKET_CAP);
+
+  const revenue = served*S.price + (S.enterprise ? 22 : 0);
+  if(S.enterprise){ S.entWeeks--; if(S.entWeeks<=0){ S.enterprise=false; log('info','Enterprise capacity contract concluded.'); } }
+
+  // -------- costs
+  const payroll = (S.researchers*0.65 + S.staff*0.40)/52 * S.comp;
+  const dc = S.owned*0.0003;
+  const leaseCost = S.leased*0.00055;
+  const cogs = served*0.8;          // non-GPU serving costs: bandwidth, storage, support, trust&safety
+  const other = 14;
+  const net = revenue - payroll - dc - leaseCost - cogs - other;
+  S.cash += net;
+
+  // -------- morale & attrition (full mode only; Ep.0 keeps morale frozen)
+  const resShare = fleet>0 ? resC/fleet : 0;
+  if(S.mode!=='simple'){
+    const trainShare = fleet>0 ? trainC/fleet : 0;
+    let target = 20 + 90*Math.min(1, trainShare + 1.6*resShare)
+      + (S.comp-1)*50
+      + clamp(S.quality-bestRival, -10, 10)*0.8;
+    if(util>0.97) target -= 10;
+    const eta = (!S.shipped && rate>0) ? (S.req-S.progress)/rate : Infinity;
+    if(!S.shipped && eta<10) target += 6;
+    if(S.shipped && S.postShip<8) target += 8;
+    S.morale = clamp(S.morale + 0.25*(target-S.morale), 0, 100);
+
+    if(S.morale < 45 && rnd() < (45-S.morale)/45*0.45){
+      const n = 2 + Math.floor(rnd()*5);
+      const who = NAMES[Math.floor(rnd()*NAMES.length)];
+      S.researchers -= n; S.departures += n; S.seniorLoss++; S.morale -= 4;
+      const dest = S.rivals[Math.floor(rnd()*S.rivals.length)].name;
+      log('bad', who+' and '+(n-1)+' others resign → '+dest+'. Training throughput permanently −3%. ("We came here to build AGI, not babysit rate limiters.")');
+    }
+  }
+
+  // -------- random events
+  runEvents(resShare, util);
+
+  // -------- lose/win checks
+  if(S.cash <= 0) return endGame(false, 'INSOLVENCY',
+    'The wires stopped clearing. Payroll bounced in week '+S.week+'. The board convened without you.');
+  S.moraleStreak = (S.mode!=='simple' && S.morale<25) ? S.moraleStreak+1 : 0;
+  if(S.moraleStreak>=5) return endGame(false, 'MASS EXODUS',
+    'Forty-one researchers published a joint departure letter. The training org is a ghost town; the run will never finish.');
+  S.obsStreak = (bestRival - S.quality > obsLimit()) ? S.obsStreak+1 : 0;
+  if(S.obsStreak===Math.ceil(obsWeeks()/2)) log('bad','You are badly behind the frontier. Enterprise customers are quietly migrating.');
+  if(S.obsStreak>=obsWeeks()) return endGame(false, 'OBSOLESCENCE',
+    'ATLAS-1 became a punchline. Acquired for parts by '+S.rivals.find(r=>r.q===bestRival).name+'.');
+  if(S.mode==='simple' && S.rlStreak>=4) return endGame(false, 'SERVICE COLLAPSE',
+    'Four straight weeks of rate limits. The subreddit\'s pinned post is a migration guide. The users left first; the board followed.');
+  if(S.shipped){
+    S.postShip++;
+    if(util > 0.97) S.surgeFail++;
+    if(S.mode!=='simple' && S.postShip===8){
+      if(S.surgeFail >= flopLimit()) return endGame(false, 'PYRRHIC LAUNCH',
+        'ATLAS-2 was a triumph nobody could use. '+S.surgeFail+' of 8 launch weeks spent rate-limiting; the moment passed, the users went elsewhere, and the board hired a "commercialization CEO."');
+      return endGame(true, 'EPISODE 1 COMPLETE',
+        'ATLAS-2 shipped and — miracle of miracles — you could actually serve it. The surge held. The researchers stayed. Somewhere, a datacenter hums.');
+    }
+  }
+  if(S.mode==='simple' && S.week>=Q_END){
+    if(S.shipped) return endGame(true, 'EPISODE 0 COMPLETE',
+      'H1 closed: ATLAS-2 shipped W'+S.shipWeek+' and the service held to the bell. The board approves H2\'s budget — and H2\'s problems.');
+    return endGame(false, 'DEADLINE MISSED',
+      'H1 closed without ATLAS-2. The board\'s patience, it turns out, ran on the same calendar.');
+  }
+
+  // -------- bookkeeping
+  S.lastNet = net; S.lastGrowth = growth; S.lastServed = served;
+  S.lastCapacity = capacity; S.lastOverflow = overflow; S.lastRevenue = revenue;
+  S.hist.rev.push(revenue); S.hist.dem.push(S.demand); S.hist.cap.push(capacity);
+  S.hist.mor.push(S.morale); S.hist.cash.push(S.cash);
+
+  render();
+  startAnim(prevView);
+}
+
+const Q_END = 26;                     // Ep.0: H1 ends here (26 weeks), win or lose
+const EP0_MARKET_CAP = 28.5;          // Ep.0 addressable market, T tok/wk (< max fleet capacity, so full reallocation can always restore service)
+function flopLimit(){ return 4; }     // full mode only; Ep.0 uses the 4-consecutive-weeks service-collapse rule
+function obsLimit(){ return S.mode==='simple' ? 15 : 22; }
+function obsWeeks(){ return S.mode==='simple' ? 6 : 10; }
+function shipModel(){
+  S.shipped = true; S.shipWeek = S.week;
+  const bonus = S.insights/25000;
+  S.quality += 20 + bonus;
+  S.demand *= (S.mode==='simple' ? 1.15 : 1.3); S.surgeWeeks = 6;
+  const bonusTxt = S.mode==='simple' ? '' : ' (research bonus +'+bonus.toFixed(1)+')';
+  log('good','★★★ ATLAS-2 SHIPS. Capability +'+ (20+bonus).toFixed(1)+bonusTxt+'. Demand '+(S.mode==='simple'?'+15%':'+30%')+' overnight and surging. NOW YOU HAVE TO SERVE IT — the training fleet just freed up, reallocate it. '+(S.mode==='simple' ? 'Four straight rate-limited weeks is still game over: hold to W'+Q_END+'.' : 'Rate-limit '+flopLimit()+' of the next 8 weeks and the launch flops.'));
+  $('tr-title').textContent = 'Training Run — ATLAS-2 [SHIPPED]';
+}
+
+function maybePoach(rival){
+  if(rnd() < 0.5 && S.researchers > 300){
+    pushDecision({
+      title:'POACHING RAID',
+      body: rival.name+' is offering your interpretability lead ('+NAMES[Math.floor(rnd()*NAMES.length)]+') and four others 3× comp plus guaranteed training compute. Your move.',
+      options:[
+        {label:'Match with retention grants (−$30M)', fn:()=>{ S.cash-=30; S.morale+=3;
+          log('info','Retention package signed. $30M. The Slack channel #compensation is jubilant, briefly.'); }},
+        {label:'Let them walk', fn:()=>{ S.researchers-=5; S.departures+=5; S.seniorLoss++; S.morale-=6;
+          log('bad','Five researchers depart to '+rival.name+'. Training throughput permanently −3%.'); }},
+      ]});
+  }
+}
+
+function runEvents(resShare, util){
+  // emergency bridge — checked every week regardless of event cooldown
+  if(S.cash < 250 && !S.bridgeUsed && !S.gameOver){
+    S.bridgeUsed = true;
+    S.cash += 400;
+    if(S.mode==='simple'){
+      log('bad','Emergency bridge round: +$400M at punishing terms.');
+    } else {
+      S.morale -= 8;
+      log('bad','Emergency bridge round: +$400M at punishing terms. Recruiting pipeline freezes; morale −8.');
+    }
+  }
+  if(S.mode==='simple'){
+    // Ep.0: no decision cards, but traffic spikes arrive without warning — the hard call is
+    // eating the churn (4-week collapse clock) vs raiding the training run (W26 deadline).
+    if(S.eventCooldown>0){ S.eventCooldown--; return; }
+    if(S.week>=3){
+      const roll = rnd();
+      if(roll < 0.10){
+        const flavors = [
+          'A screenshot of ATLAS-1 refactoring a 40k-line codebase goes viral.',
+          'Menlo Research has a 14-hour outage; their refugees pour in.',
+          'A Fortune 100 rolls ATLAS-1 out to every employee overnight.'];
+        const mult = 1.10 + rnd()*0.08;
+        S.demand = Math.min(S.demand*mult, EP0_MARKET_CAP);
+        S.eventCooldown = 3;
+        log('warn','⚡ TRAFFIC SPIKE — '+flavors[Math.floor(rnd()*flavors.length)]+' Demand +'+Math.round((mult-1)*100)+'% overnight.');
+      } else if(roll < 0.16){
+        const r = S.rivals[Math.floor(rnd()*S.rivals.length)];
+        const jump = 4 + rnd()*3;
+        r.q += jump;
+        S.eventCooldown = 3;
+        log('bad','⚠ RIVAL BREAKTHROUGH — '+r.name+' posts shock eval results: capability +'+jump.toFixed(1)+'. The frontier just moved.');
+      }
+    }
+    return;
+  }
+  if(S.eventCooldown>0){ S.eventCooldown--; return; }
+  const roll = rnd();
+  if(roll < 0.05){
+    S.demand *= 1.12; S.eventCooldown = 3;
+    log('good','A screenshot of ATLAS-1 doing something uncanny goes viral. Demand +12%.');
+  } else if(roll < 0.09){
+    S.outage = 2; S.eventCooldown = 3;
+    log('bad','Cooling failure in Hall C — 8% of serving fleet and training throughput degraded for 2 weeks.');
+  } else if(roll < 0.13 && resShare > 0.12){
+    S.infEff *= 1.07; S.eventCooldown = 4;
+    log('good','Inference team lands fused kernels + better speculative decoding: serving efficiency +7%.');
+  } else if(roll < 0.16 && !S.entOffered && S.week >= 10){
+    S.entOffered = true; S.eventCooldown = 2;
+    pushDecision({
+      title:'ENTERPRISE CAPACITY CONTRACT',
+      body:'A mega-cap wants a 20-week guaranteed-capacity deal: $22M/wk flat, but you must keep ≥4,000 H100e on inference at all times — even during the ATLAS-2 endgame. Predictable revenue vs. allocation freedom.',
+      options:[
+        {label:'Sign it ($22M/wk × 20wk)', fn:()=>{ S.enterprise=true; S.entWeeks=20;
+          log('info','Enterprise contract signed. CFO sleeps; head of pretraining does not.'); }},
+        {label:'Decline', fn:()=>log('info','Contract declined. Allocation freedom preserved.')},
+      ]});
+  } else if(roll < 0.19 && !S.raiseOffered && S.week >= 20){
+    S.raiseOffered = true; S.eventCooldown = 2;
+    pushDecision({
+      title:'TERM SHEET',
+      body:'A sovereign-adjacent growth fund offers $1.5B at a flat valuation. Dilutive, strings attached ("aggressive commercialization milestones"), but it is a very large number.',
+      options:[
+        {label:'Take the money (+$1.5B, morale −3)', fn:()=>{ S.cash+=1500; S.morale-=3;
+          log('good','Round closed: +$1.5B. The milestone schedule in Appendix C is… ambitious.'); }},
+        {label:'Decline', fn:()=>log('info','Term sheet declined. The board notes your confidence. Twice.')},
+      ]});
+  }
+}
+
+function endGame(won, title, body){
+  S.gameOver = true; setSpeed(0);
+  const score = Math.round(S.cash/10 + S.demand*20 + (S.mode==='simple' ? 0 : S.morale) + Math.max(0,(70-S.week))*12);
+  const staffStats = S.mode==='simple' ? '' : ' · Morale '+S.morale.toFixed(0)+' · Departures '+S.departures;
+  $('ov-title').textContent = title;
+  $('ov-restart').textContent = S.mode==='simple' ? 'RESTART EPISODE 0' : 'RESTART EPISODE 1';
+  $('ov-body').innerHTML = '<p>'+body+'</p><p class="dm">Week '+S.week+' · Cash '+fmtM(S.cash)+' · Demand '+fmtT(S.demand)+'/wk · Capability '+S.quality.toFixed(0)+staffStats+'</p>';
+  $('ov-score').textContent = won ? 'SCORE: '+score : '';
+  $('ov-box').className = won ? 'box' : 'box lost';
+  $('overlay').style.display = 'flex';
+  render();
+}
+
+// ============================================================ sliders
+function bindAlloc(){
+  const ids = {inf:'al-inf', train:'al-train', res:'al-res'};
+  Object.entries(ids).forEach(([key, id])=>{
+    $(id).addEventListener('input', ()=>{
+      const v = clamp(parseInt($(id).value,10), 0, 100)/100;
+      if(S.mode==='simple'){
+        // Ep.0: pure two-way trade — inference and training are complements, research locked at 0
+        if(key==='res') return;
+        S.alloc[key] = v;
+        S.alloc[key==='inf' ? 'train' : 'inf'] = 1 - v;
+        S.alloc.res = 0;
+      } else {
+        const others = Object.keys(ids).filter(k=>k!==key);
+        const rest = 1 - v;
+        const cur = others.reduce((a,k)=>a+S.alloc[k], 0);
+        others.forEach(k=>{ S.alloc[k] = cur>0.001 ? S.alloc[k]/cur*rest : rest/2; });
+        S.alloc[key] = v;
+      }
+      renderAlloc(); render();
+    });
+  });
+  $('pol-price').addEventListener('input', ()=>{ S.price = parseFloat($('pol-price').value); render(); });
+  $('pol-comp').addEventListener('input', ()=>{ S.comp = parseFloat($('pol-comp').value); render(); });
+}
+function renderAlloc(){
+  $('al-inf').value = Math.round(S.alloc.inf*100);
+  $('al-train').value = Math.round(S.alloc.train*100);
+  $('al-res').value = Math.round(S.alloc.res*100);
+}
+
+// ============================================================ sparklines
+function spark(id, series, color, series2, color2){
+  const c = $(id), ctx = c.getContext('2d');
+  const w = c.width = c.clientWidth*2, h = c.height = c.clientHeight*2;
+  ctx.clearRect(0,0,w,h);
+  const all = series2 ? series.concat(series2) : series;
+  if(all.length < 2) return;
+  const min = Math.min(...all, 0), max = Math.max(...all)*1.05 || 1;
+  const draw = (s, col)=>{
+    ctx.beginPath(); ctx.strokeStyle = col; ctx.lineWidth = 2;
+    s.forEach((v,i)=>{
+      const x = i/(Math.max(s.length-1,1))*w;
+      const y = h - (v-min)/(max-min)*(h-6) - 3;
+      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+  };
+  draw(series, color);
+  if(series2) draw(series2, color2);
+}
+
+// ============================================================ render
+function cls(el, c){ el.className = 'num '+(c||''); }
+function render(){
+  const fleet = S.owned + S.leased;
+  // topbar
+  $('t-date').textContent = 'W'+S.week+' · '+dateStr(S.week);
+  $('t-cash').textContent = fmtM(S.cash);
+  cls($('t-cash'), S.cash<300?'neg':(S.cash<800?'wrn':''));
+  $('t-net').textContent = (S.lastNet>=0?'+':'')+fmtM(S.lastNet).replace('−','−');
+  $('t-net').className = 'val '+(S.lastNet>=0?'pos':'neg');
+  $('t-compute').textContent = fmtK(fleet)+' H100e';
+  $('t-morale').textContent = S.morale.toFixed(0)+' / 100';
+  $('t-morale').className = 'val '+(S.morale<35?'neg':(S.morale<50?'wrn':'pos'));
+  const best = Math.max(...S.rivals.map(r=>r.q));
+  const lead = S.quality - best;
+  $('t-lead').textContent = (lead>=0?'+':'')+lead.toFixed(1);
+  $('t-lead').className = 'val '+(lead>=0?'pos':(lead>-10?'wrn':'neg'));
+
+  // allocation readouts
+  $('al-inf-out').textContent = Math.round(S.alloc.inf*100)+'% · '+fmtK(fleet*S.alloc.inf);
+  $('al-train-out').textContent = Math.round(S.alloc.train*100)+'% · '+fmtK(fleet*S.alloc.train);
+  $('al-res-out').textContent = Math.round(S.alloc.res*100)+'% · '+fmtK(fleet*S.alloc.res);
+  $('al-note').textContent = S.enterprise ? 'Enterprise SLA: inference floor 4,000 H100e ('+S.entWeeks+'wk left)' : '';
+
+  // policy
+  $('pol-price-out').textContent = '$'+S.price.toFixed(2);
+  $('pol-comp-out').textContent = S.comp.toFixed(2)+'×';
+
+  // fleet
+  $('btn-lease').disabled = leasedAndPending() + 5000 > LEASE_CAP;
+  $('btn-lease').textContent = $('btn-lease').disabled ? 'LEASE MARKET SOLD OUT' : 'LEASE +5,000 H100e (6wk lead)';
+  $('f-owned').textContent = fmtK(S.owned);
+  $('f-leased').textContent = fmtK(S.leased);
+  $('f-total').textContent = fmtK(fleet);
+  const inc = [];
+  S.leaseOrders.forEach(o=>inc.push('+'+fmtK(o.amt)+' leased in '+o.lead+'wk'));
+  Object.entries(S.deliveries).forEach(([w,d])=>{ if(+w>S.week) inc.push('+'+fmtK(d.amt)+' owned in W'+w); });
+  S.leases.forEach(l=>{ if(l.termLeft<=4) inc.push('−'+fmtK(l.amt)+' lease expires in '+l.termLeft+'wk'); });
+  $('f-incoming').textContent = inc.length ? 'Pipeline: '+inc.join(' · ') : 'Pipeline: none';
+
+  // product
+  $('p-demand').textContent = fmtT(S.demand)+' tok/wk';
+  $('p-capacity').textContent = fmtT(S.lastCapacity || fleet*S.alloc.inf*0.001*S.infEff)+' tok/wk';
+  $('p-served').textContent = fmtT(S.lastServed);
+  const util = (S.lastCapacity>0) ? S.demand/S.lastCapacity : 0;
+  $('p-util').textContent = pct(Math.min(util, 9.99));
+  cls($('p-util'), util>0.97?'neg':(util>0.85?'wrn':'pos'));
+  $('p-overflow').textContent = fmtT(Math.max(0,S.lastOverflow));
+  cls($('p-overflow'), S.lastOverflow>0.01?'neg':'');
+  $('p-growth').textContent = (S.lastGrowth>=0?'+':'')+pct(S.lastGrowth);
+  cls($('p-growth'), S.lastGrowth>=0?'pos':'neg');
+  $('p-eff').textContent = S.infEff.toFixed(2)+'×';
+  $('p-rev').textContent = fmtM(S.lastRevenue)+'/wk';
+  $('p-warn').textContent = util>0.97
+    ? (S.lastChurn>0.005 ? '▲ RATE LIMITING — churning '+fmtT(S.lastChurn)+'/wk to rivals, growth penalized'
+                         : '▲ SERVICE DEGRADED — no headroom ('+pct(util)+'), growth penalized')
+    : (util>0.85 ? '△ approaching capacity ('+pct(util)+')' : '');
+
+  // training
+  const prog = Math.min(1, S.progress/S.req);
+  $('tr-bar').style.width = (prog*100).toFixed(1)+'%';
+  $('tr-prog').textContent = fmtK(S.progress)+' / '+fmtK(S.req)+' ('+(prog*100).toFixed(1)+'%)';
+  // pre-first-tick fallback: estimate rate from the current allocation so ETA/projections show at W0
+  const rateEst = S.lastRate>0 ? S.lastRate : fleet*S.alloc.train;
+  const eta = (!S.shipped && rateEst>0) ? Math.ceil((S.req-S.progress)/rateEst) : null;
+  $('tr-eta').textContent = S.shipped ? 'SHIPPED' : (eta ? '~'+eta+' wk' : '∞ (no compute)');
+  cls($('tr-eta'), S.shipped?'pos':(eta===null?'neg':''));
+  $('tr-rate').textContent = fmtK(S.lastRate)+' /wk';
+  $('tr-algo').textContent = (1 + 0.6*(1-Math.exp(-S.insights/45000))).toFixed(3)+'×';
+  $('tr-mor').textContent = (0.75+S.morale*0.005).toFixed(3)+'×';
+  $('tr-div').textContent = pct(S.lastDivP);
+  cls($('tr-div'), S.lastDivP>0.03?'wrn':'');
+  $('tr-pen').textContent = S.seniorLoss>0 ? '−'+(Math.min(60,S.seniorLoss*3))+'%' : 'none';
+  cls($('tr-pen'), S.seniorLoss>0?'neg':'pos');
+  $('tr-status').textContent = S.shipped
+    ? (S.mode==='simple' ? 'shipped — hold to W'+Q_END : 'hold '+(8-S.postShip)+'wk more · flop strikes '+S.surgeFail+'/'+flopLimit())
+    : (S.outage>0?'degraded (outage)':'running');
+  const payoff = 20 + (S.mode==='simple' ? 0 : S.insights/25000);
+  $('tr-payoff').textContent = '+'+payoff.toFixed(1)+' capability'+(S.mode==='simple' ? ' (guaranteed)' : '');
+  $('tr-payoff-lbl').title = S.mode==='simple'
+    ? 'Capability jump when ATLAS-2 ships. Flat +20 in Episode 0 — guaranteed. Later episodes add uncertainty.'
+    : 'Capability jump when ATLAS-2 ships: +20 plus insights/25k earned by research.';
+  if(S.shipped){
+    $('tr-proj').textContent = (lead>=0?'+':'')+lead.toFixed(1)+' (shipped)';
+    cls($('tr-proj'), lead>=0?'pos':'neg');
+  } else if(eta){
+    const proj = (S.quality + payoff) - (best + 0.7*eta);
+    $('tr-proj').textContent = (proj>=0?'+':'')+proj.toFixed(1)+' in ~'+eta+'wk';
+    cls($('tr-proj'), proj>=0?'pos':(proj>-5?'wrn':'neg'));
+  } else {
+    $('tr-proj').textContent = '—'; cls($('tr-proj'),'');
+  }
+
+  // objective panel (Ep.0 only)
+  if(S.mode==='simple'){
+    let winLine;
+    if(S.shipped){
+      winLine = '<span class="pos"><b>ATLAS-2 SHIPPED (W'+S.shipWeek+').</b></span> Hold service until H1 ends (<b>W'+Q_END+'</b>) — '+(Q_END-S.week)+' weeks left.';
+    } else if(eta){
+      const projShip = S.week+eta;
+      winLine = '<b>WIN:</b> ship ATLAS-2 (ETA ≈ W'+projShip+(projShip>=Q_END?' <span class="neg">— past the deadline!</span>':'')+'), then hold service until H1 ends (<b>W'+Q_END+'</b>).';
+    } else {
+      winLine = '<b>WIN:</b> ship ATLAS-2 before <b>W'+Q_END+'</b>. <span class="neg">No training compute — the run will never finish.</span>';
+    }
+    $('obj-body').innerHTML = winLine;
+
+    // H1 timeline: week progress + projected-ship marker
+    $('tl-fill').style.width = Math.min(100, S.week/Q_END*100)+'%';
+    const shipMark = S.shipped ? S.shipWeek : (eta ? S.week+eta : null);
+    if(shipMark!==null){
+      $('tl-eta').style.display = '';
+      $('tl-eta').style.left = Math.min(99, shipMark/Q_END*100)+'%';
+      $('tl-eta').style.background = S.shipped ? 'var(--good)' : 'var(--amber)';
+    } else $('tl-eta').style.display = 'none';
+
+    // hazard cards
+    $('hz-cash-bar').style.width = Math.max(0, Math.min(100, S.cash/1600*100))+'%';
+    $('hz-cash-bar').style.background = S.cash<300 ? 'var(--bad)' : (S.cash<800 ? 'var(--warn)' : 'var(--good)');
+    $('hz-cash-val').textContent = fmtM(S.cash);
+    $('hz-cash-val').className = 'hval '+(S.cash<300?'neg':(S.cash<800?'wrn':''));
+    [...$('hz-gap-pips').children].forEach((p,i)=>p.classList.toggle('on', i<S.obsStreak));
+    $('hz-gap-val').textContent = 'gap '+(lead>=0?'+':'')+lead.toFixed(0)+' (limit −'+obsLimit()+')';
+    $('hz-gap-val').className = 'hval '+(lead>=0?'pos':(lead>-10?'wrn':'neg'));
+    [...$('hz-rl-pips').children].forEach((p,i)=>p.classList.toggle('on', i<S.rlStreak));
+    $('hz-rl-val').textContent = 'util '+pct(Math.min(util,9.99));
+    $('hz-rl-val').className = 'hval '+(util>0.97?'neg':(util>0.85?'wrn':'pos'));
+  }
+
+  // research
+  $('r-ins').textContent = fmtK(S.insights)+' H100e-wk';
+  $('r-eff').textContent = (1 + 0.6*(1-Math.exp(-S.insights/45000))).toFixed(3)+'×';
+  $('r-bonus').textContent = '+'+(S.insights/25000).toFixed(1)+' capability';
+  $('r-heads').textContent = fmtK(S.researchers);
+
+  // finance
+  $('fin-rev').textContent = fmtM(S.lastServed*S.price);
+  if(S.enterprise){ $('fin-ent-row').style.display=''; $('fin-ent').textContent = fmtM(22); }
+  else $('fin-ent-row').style.display='none';
+  const payroll = (S.researchers*0.65 + S.staff*0.40)/52 * S.comp;
+  $('fin-costs').textContent = '−'+fmtM(Math.max(0, S.lastRevenue - S.lastNet));
+  $('fin-cogs').textContent = '−'+fmtM(S.lastServed*0.8);
+  $('fin-pay').textContent = '−'+fmtM(payroll).replace('$','$');
+  $('fin-dc').textContent = '−'+fmtM(S.owned*0.0003);
+  $('fin-lease').textContent = S.leased>0 ? '−'+fmtM(S.leased*0.00055) : '$0.0M';
+  $('fin-other').textContent = '−'+fmtM(14);
+  $('fin-net').textContent = (S.lastNet>=0?'+':'')+fmtM(S.lastNet);
+  cls($('fin-net'), S.lastNet>=0?'pos':'neg');
+  $('fin-cash').textContent = fmtM(S.cash);
+  $('fin-run').textContent = S.lastNet>=0 ? '∞ (profitable)' : Math.floor(S.cash/(-S.lastNet))+' wk';
+  cls($('fin-run'), S.lastNet>=0 ? 'pos' : (S.cash/(-S.lastNet)<15 ? 'neg':''));
+
+  // rivals
+  const tbl = $('rivals');
+  while(tbl.rows.length>1) tbl.deleteRow(1);
+  const you = tbl.insertRow();
+  you.innerHTML = '<td style="color:var(--amber)">YOU — '+(S.shipped?'ATLAS-2':'ATLAS-1')+'</td><td class="num" style="color:var(--amber)">'+S.quality.toFixed(1)+'</td><td class="num">—</td><td class="num">'+(S.shipped?'W'+(S.week-S.postShip):'launch')+'</td>';
+  S.rivals.slice().sort((a,b)=>b.q-a.q).forEach(r=>{
+    const row = tbl.insertRow();
+    const d = r.q - S.quality;
+    row.innerHTML = '<td>'+r.name+'</td><td class="num">'+r.q.toFixed(1)+'</td><td class="num '+(d>0?'neg':'pos')+'">'+(d>0?'+':'')+d.toFixed(1)+'</td><td class="num dm">'+r.lastShip+'</td>';
+  });
+  $('obs-warn').textContent = S.obsStreak>0 ? '▲ OBSOLESCENCE CLOCK: '+S.obsStreak+'/'+obsWeeks()+' weeks more than '+obsLimit()+' points behind' : '';
+
+  // staff
+  $('s-res').textContent = fmtK(S.researchers);
+  $('s-staff').textContent = fmtK(S.staff);
+  $('s-mor').textContent = S.morale.toFixed(0);
+  cls($('s-mor'), S.morale<35?'neg':(S.morale<50?'wrn':'pos'));
+  $('s-dep').textContent = S.departures + (S.seniorLoss>0 ? ' ('+S.seniorLoss+' senior)' : '');
+  $('s-morbar').style.width = S.morale+'%';
+  $('s-morbar').style.background = S.morale<35 ? 'var(--bad)' : (S.morale<50 ? 'var(--warn)' : 'var(--good)');
+  $('s-note').textContent = S.morale<45 ? '▲ resignation risk — researchers want training+research compute, market comp, a lead' :
+    (S.morale>80 ? 'Researchers energized.' : '');
+
+  // sparklines
+  spark('ch-rev', S.hist.rev, '#6fce8f');
+  spark('ch-dem', S.hist.dem, '#e8b04b', S.hist.cap, '#6ea8d8');
+  spark('ch-mor', S.hist.mor, '#6fce8f');
+  spark('ch-cash', S.hist.cash, '#e8b04b');
+}
+
+// ============================================================ speed
+function setSpeed(s){
+  speed = s;
+  S.resumeSpeed = 0;
+  killAnim();
+  if(timer){ clearInterval(timer); timer = null; }
+  if(s>0 && !S.gameOver) timer = setInterval(tick, 3000);
+  ['sp-pause','sp-1'].forEach(id=>$(id).classList.remove('active'));
+  $(s===0?'sp-pause':'sp-1').classList.add('active');
+}
+function stepOnce(){ setSpeed(0); tick(); }
+
+// ============================================================ boot / reset
+function resetGame(){
+  killAnim();
+  S = initState(); window.S = S;
+  document.body.classList.toggle('simple', MODE==='simple');
+  $('subtitle').textContent = MODE==='simple' ? '· EP.0 — THE TRADE' : '· EP.1 — THE ALLOCATION PROBLEM';
+  $('log').innerHTML = ''; $('decisions').innerHTML = '';
+  $('overlay').style.display = 'none';
+  $('tr-title').textContent = 'Training Run — ATLAS-2';
+  $('pol-price').value = 4; $('pol-comp').value = 1;
+  // mode-aware tooltips on elements visible in both modes
+  $('al-train-name').title = MODE==='simple'
+    ? 'Feeds the ATLAS-2 run. Progress/wk = H100e allocated. Every point here is capacity not serving customers.'
+    : 'Feeds the ATLAS-2 run. Progress/wk = H100e × algo efficiency × morale factor × (1 − senior-departure penalty).';
+  $('tr-eta-lbl').title = MODE==='simple'
+    ? 'At current allocation.'
+    : 'At current allocation, efficiency and morale.';
+  $('p-eff-lbl').title = MODE==='simple'
+    ? 'Serving-stack efficiency. Fixed at 1.00× in Episode 0.'
+    : 'Serving-stack efficiency. Improved by kernel/speculative-decoding breakthroughs (needs research allocation).';
+  renderAlloc();
+  if(MODE==='simple'){
+    log('sys','FRONTIER LAB TYCOON — EPISODE 0: THE TRADE');
+    log('sys','One fleet, two jobs. Every H100e serving ATLAS-1 is one not training ATLAS-2. Ship the model before H1 ends (W26) and hold service to the bell.');
+    log('info','The run pays a flat +20 capability on ship — guaranteed in this episode. (Later episodes add uncertainty.)');
+    log('info','Lose if: cash hits $0 · you sit 15+ behind the frontier for 6 weeks · you rate-limit 4 weeks straight. Spikes — in your traffic and in rival models — arrive without warning.');
+  } else {
+    log('sys','FRONTIER LAB TYCOON — EPISODE 1: THE ALLOCATION PROBLEM');
+    log('sys','You run a frontier lab. One fleet of 30,000 H100e. Ship ATLAS-2 and survive its launch surge. Do not run out of money, researchers, or relevance.');
+    log('info','The board\'s parting words: "Inference pays for training. Training justifies inference. Try to remember which one the researchers joined for."');
+  }
+  render();
+  setSpeed(0);
+}
+function showModeSelect(allowCancel){
+  setSpeed(0);
+  $('mode-cancel').style.display = allowCancel ? '' : 'none';
+  $('modeoverlay').style.display = 'flex';
+}
+function hideModeSelect(){
+  $('modeoverlay').style.display = 'none';   // current game (or game-over screen) is untouched underneath; stays paused
+}
+function startGame(mode){
+  MODE = mode;
+  $('modeoverlay').style.display = 'none';
+  resetGame();                               // starts PAUSED — STEP through your first weeks, or press 1×
+}
+
+// ============================================================ tutorial
+const TUT_STEPS = [
+  {t:'THE TRADE', h:'You run a frontier AI lab with one fleet of <b>30,000 H100e</b> GPUs and two jobs for it:<br><br>'+
+    '<b>INFERENCE</b> serves your shipped model, ATLAS-1 — that is revenue and user growth.<br>'+
+    '<b>TRAINING</b> builds the next model, ATLAS-2 — a guaranteed <b>+20 capability</b> the day it ships.<br><br>'+
+    'Every GPU can only do one. The <b>COMPUTE ALLOCATION</b> slider (top-left) is the whole game.'},
+  {t:'SERVE YOUR USERS', h:'Token demand grows every week. Watch <b>UTILIZATION</b> in the Product panel: above <b>97%</b> you are rate-limiting — growth stalls and users churn to rivals, permanently.<br><br>'+
+    '<b>Rate-limit 4 weeks in a row and the game is over</b> (Service Collapse). The <b>RATE LIMITS</b> pips in the Objective panel are that death clock.'},
+  {t:'SHIP BEFORE THE CLOCK', h:'Rivals improve every week. Sit <b>15+ capability points behind for 6 weeks</b> and you are acquired — the <b>FRONTIER GAP</b> pips. And ATLAS-2 must ship before <b>H1 ends at W26</b>; the timeline bar tracks both.<br><br>'+
+    'When it ships, demand surges — and the training fleet frees up that instant. <b>Reallocate it to inference immediately</b> or your own launch will kill you.'},
+  {t:'CONTROLS', h:'The game starts <b>paused</b>. <b>STEP ▸</b> advances one week at a time — recommended for your first run. <b>▸ 1×</b> runs in real time; pause whenever you like.<br><br>'+
+    'Expect the unexpected: traffic spikes and rival breakthroughs arrive without warning. Good luck, CEO.'},
+];
+let tutIdx = 0;
+function renderTut(){
+  const s = TUT_STEPS[tutIdx];
+  $('tut-step-label').textContent = 'TUTORIAL '+(tutIdx+1)+'/'+TUT_STEPS.length+' — '+s.t;
+  $('tut-body').innerHTML = s.h;
+  $('tut-back').disabled = tutIdx===0;
+  $('tut-next').textContent = tutIdx===TUT_STEPS.length-1 ? 'START ▸' : 'NEXT ▸';
+}
+function tutStep(d){
+  if(d>0 && tutIdx===TUT_STEPS.length-1){ closeTutorial(); return; }
+  tutIdx = clamp(tutIdx+d, 0, TUT_STEPS.length-1);
+  renderTut();
+}
+function showTutorial(){
+  setSpeed(0);
+  tutIdx = 0; renderTut();
+  $('tutoverlay').style.display = 'flex';
+}
+function closeTutorial(){
+  $('tutoverlay').style.display = 'none';
+  try{ localStorage.setItem('flt_tutorial_seen','1'); }catch(e){}
+}
+bindAlloc();
+window.tick = tick; window.resetGame = resetGame; window.startGame = startGame;   // debug handles; startGame('full') = hidden Episode 1
+MODE = 'simple';
+resetGame();                                  // Episode 0, paused at W0
+let tutSeen = false;
+try{ tutSeen = !!localStorage.getItem('flt_tutorial_seen'); }catch(e){}
+if(!tutSeen) showTutorial();
+</script>
+</body>
+</html>
