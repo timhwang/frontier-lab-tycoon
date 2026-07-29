@@ -123,6 +123,13 @@
   .pip.on{background:var(--bad); border-color:var(--bad);}
   #obj-timeline{position:relative; margin-top:6px;}
   #tl-eta{position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--amber);}
+  /* compute pipeline: countdown rows for incoming/expiring capacity */
+  .pipe-row{display:grid; grid-template-columns:88px 1fr 32px; gap:6px; align-items:center; font-size:10px; margin:3px 0;}
+  .pipe-lbl{color:var(--dim); white-space:nowrap; cursor:help;}
+  .pipe-bar{height:6px; background:#1a2132; border:1px solid var(--border2);}
+  .pipe-bar .fill{height:100%;}
+  .pipe-eta{text-align:right; font-variant-numeric:tabular-nums; color:var(--txt);}
+
   /* split bar: blue = inference, amber = training — matches capacity (blue) and run-progress (amber) colors */
   #al-splitbar{margin-top:6px; background:var(--amber);}
   #al-split-fill{background:var(--blue);}
@@ -196,7 +203,7 @@
             <tr class="full-only"><td class="lbl" title="Cloud capacity under lease. $550/wk per H100e, 26-week terms.">Leased H100e</td><td class="num" id="f-leased"></td></tr>
             <tr class="total"><td class="lbl">Total fleet</td><td class="num" id="f-total"></td></tr>
           </table>
-          <div id="f-incoming" class="dm full-only" style="margin-top:4px; font-size:11px;"></div>
+          <div id="pipeline" class="full-only" style="margin-top:5px;"></div>
           <button id="btn-lease-inf" class="full-only" style="width:100%; margin-top:6px;" onclick="orderLease('inf')"
             title="Order 5,000 leased H100e pointed at SERVING: $60M signing fee now, then $2.75M/wk for the 26-week term. 6-week lead. Arrives already on inference — no migration delay. Provider cap: 15,000 leased at once.">
             LEASE +5,000 → INFERENCE</button>
@@ -824,11 +831,26 @@ function render(){
   $('f-owned').textContent = fmtK(S.owned);
   $('f-leased').textContent = fmtK(S.leased);
   $('f-total').textContent = fmtK(fleet);
-  const inc = [];
-  S.leaseOrders.forEach(o=>inc.push('+'+fmtK(o.amt)+' leased in '+o.lead+'wk'));
-  Object.entries(S.deliveries).forEach(([w,d])=>{ if(+w>S.week) inc.push('+'+fmtK(d.amt)+' owned in W'+w); });
-  S.leases.forEach(l=>{ if(l.termLeft<=4) inc.push('−'+fmtK(l.amt)+' lease expires in '+l.termLeft+'wk'); });
-  $('f-incoming').textContent = inc.length ? 'Pipeline: '+inc.join(' · ') : 'Pipeline: none';
+  // pipeline: countdown rows (bars fill as the event approaches)
+  const pipeRow = (lbl, frac, color, eta, tip) =>
+    '<div class="pipe-row" title="'+tip+'"><span class="pipe-lbl">'+lbl+'</span>'+
+    '<div class="pipe-bar"><div class="fill" style="width:'+Math.round(Math.max(0,Math.min(1,frac))*100)+'%; background:'+color+';"></div></div>'+
+    '<span class="pipe-eta">'+eta+'wk</span></div>';
+  let pipes = '';
+  S.leaseOrders.forEach(o=>{
+    const dest = o.dest==='train';
+    pipes += pipeRow('+'+fmtK(o.amt)+' → '+(dest?'TRAIN':'INF'), (6-o.lead)/6, dest?'var(--amber)':'var(--blue)', o.lead,
+      'Leased block provisioning — arrives on '+(dest?'training':'inference')+' in '+o.lead+' week'+(o.lead===1?'':'s')+'.');
+  });
+  Object.entries(S.deliveries).forEach(([w,d])=>{
+    if(+w>S.week) pipes += pipeRow('+'+fmtK(d.amt)+' owned', S.week/+w, 'var(--blue)', +w-S.week,
+      d.label+' — contracted delivery, lands W'+w+' pointed at inference.');
+  });
+  S.leases.forEach(l=>{
+    if(l.termLeft<=6) pipes += pipeRow('−'+fmtK(l.amt)+' expiry', (6-l.termLeft)/6, 'var(--bad)', l.termLeft,
+      'Lease term ending — this block returns to the provider in '+l.termLeft+' week'+(l.termLeft===1?'':'s')+'.');
+  });
+  $('pipeline').innerHTML = pipes || '<div class="dm" style="font-size:10px;">pipeline: none</div>';
 
   // product
   $('p-title').textContent = 'Product & Serving — '+servingModel();
