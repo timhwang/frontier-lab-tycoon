@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FRONTIER LAB TYCOON</title>
+<meta name="description" content="One fleet. Two jobs. Serve the users or train the model — a spreadsheet-style frontier-lab simulator.">
+<meta property="og:title" content="FRONTIER LAB TYCOON">
+<meta property="og:description" content="One fleet. Two jobs. Serve the users or train the model — a spreadsheet-style frontier-lab simulator.">
+<meta property="og:image" content="https://timhwang.github.io/frontier-lab-tycoon/og.png">
+<meta property="og:url" content="https://timhwang.github.io/frontier-lab-tycoon/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://timhwang.github.io/frontier-lab-tycoon/og.png">
 <style>
   :root{
     --bg:#0b0e14; --panel:#10141d; --panel2:#0d1119; --border:#232a3a; --border2:#2e3850;
@@ -368,7 +376,7 @@
             <b>The bind:</b> one fleet, three mouths. <b>Inference</b> earns revenue now; every H100e there is one not training ATLAS-2. <b>Training</b> is your future — rivals improve ~0.7 capability/wk and ship jumps; fall &gt;22 behind for 10 weeks and users evaporate (acquisition, game over). <b>Research</b> looks like waste until you notice it multiplies every training FLOP, cuts divergence risk, and is the main thing keeping researchers from quitting.<br><br>
             <b>Serving:</b> demand &gt; capacity ⇒ rate limits ⇒ growth penalty and 30% of unmet demand churns to rivals permanently. Watch utilization like a hawk near launches.<br><br>
             <b>Morale:</b> researchers want training + research share, comp above market, and a capability lead. Below 45 they start resigning (each senior loss −3% training throughput, forever). Below 25 for 5 weeks = mass exodus.<br><br>
-            <b>Win:</b> ship ATLAS-2, then <i>serve</i> the launch: demand jumps at ship and burns hot for ~6 weeks, and you must hold service through the full 8-week launch window — rate-limit 4 of those weeks and the launch flops. (Episode 0 has no flop counter; instead, 4 consecutive rate-limited weeks at any point is game over, and the episode always ends at W26.) During the surge, churn doubles down: 45% of unmet demand leaves for good (vs 30% normally). Plan capacity before you ship; leases take 6 weeks. When the run finishes, its compute frees up — reallocate it immediately. <b>Lose:</b> insolvency, exodus, obsolescence, or a pyrrhic launch.
+            <b>Win:</b> ship ATLAS-2, then <i>serve</i> the launch: demand jumps at ship and burns hot for ~6 weeks, and you must hold service through the full 8-week launch window — rate-limit 4 of those weeks and the launch flops. (Episode 0 has no flop counter; instead, 4 consecutive rate-limited weeks at any point is game over, and the episode always ends at W26. Ep.0's launch multiplier is random — ×1.25 up to ×2.0 — and during the surge demand can exceed anything your fleet can serve: the bigger your product at ship, the deadlier the storm.) During the surge, churn hits harder (45–65% of unmet demand defects, vs 30% normally) — but a big crowd can only drain so fast, so a large enough storm outlasts the clock no matter what you do. Plan capacity before you ship; leases take 6 weeks. When the run finishes, its compute frees up — reallocate it immediately. <b>Lose:</b> insolvency, exodus, obsolescence, or a pyrrhic launch.
           </div>
         </details>
       </div>
@@ -428,6 +436,7 @@ function initState(){ return {
   researchers: 420, staff: 900,
   morale: 68, departures: 0, seniorLoss: 0,
   demand: 12.0,                     // T tokens/wk
+  spikeBleed: 0,                    // Ep.0: transient share of spike traffic still to fade back out
   infEff: 1.0,
   quality: 62,
   insights: 0,
@@ -655,17 +664,35 @@ function tick(){
     + 0.02*(4 - S.price)/4;
   if(S.pressMalus>0){ growth -= 0.02; S.pressMalus--; }
   const surging = S.surgeWeeks>0;
-  if(surging){ growth += (S.mode==='simple' ? 0.04 : 0.07); S.surgeWeeks--; }
+  if(surging){
+    growth += (S.mode==='simple' ? 0.015 : 0.07);
+    S.surgeWeeks--;
+    if(S.mode==='simple' && S.surgeWeeks===0)
+      log('info','The launch frenzy subsides — demand settles back toward the addressable market.');
+  }
   if(util > 0.97){
-    growth -= 0.035;
-    S.lastChurn = overflow*(surging ? 0.45 : 0.30);
+    // Ep.0 launch crowds are fickle: they bail fast (harsher growth hit + churn), which is
+    // also what lets an over-fleet storm decay back to serveable within the 4-week clock
+    growth -= (surging && S.mode==='simple') ? 0.10 : 0.035;
+    let churnAmt = overflow*(surging ? (S.mode==='simple' ? 0.65 : 0.45) : 0.30);
+    // churn saturates: a launch crowd keeps hammering the API for weeks before giving up,
+    // so a big enough storm CANNOT purge itself quickly — some storms simply outlast the clock
+    if(S.mode==='simple') churnAmt = Math.min(churnAmt, S.demand*0.12);
+    S.lastChurn = churnAmt;
     S.demand -= S.lastChurn;
     S.rlStreak++;
     if(S.rlStreak===2) log('warn','Sustained rate-limiting. "Is ATLAS down again?" is trending. Users churning to rivals.');
     if(S.rlStreak===5 && S.pressMalus===0){ S.pressMalus = 4; log('bad','Longform press piece: "The AI Lab That Can\'t Keep the Lights On." Growth −2%/wk for 4 weeks.'); }
   } else { S.rlStreak = 0; S.lastChurn = 0; }
   S.demand = Math.max(0.5, S.demand*(1+growth));
-  if(S.mode==='simple') S.demand = Math.min(S.demand, EP0_MARKET_CAP);
+  if(S.mode==='simple'){
+    S.demand = Math.min(S.demand, surging ? EP0_SURGE_CAP : EP0_MARKET_CAP);
+    if(S.spikeBleed > 0.05){            // viral spike traffic fades back out over ~5 weeks
+      const b = S.spikeBleed*0.3;
+      S.demand = Math.max(1, S.demand - b);
+      S.spikeBleed -= b;
+    }
+  }
 
   const revenue = served*S.price + (S.enterprise ? 22 : 0);
   if(S.enterprise){ S.entWeeks--; if(S.entWeeks<=0){ S.enterprise=false; log('info','Enterprise capacity contract concluded.'); } }
@@ -714,8 +741,12 @@ function tick(){
   if(S.obsStreak===Math.ceil(obsWeeks()/2)) log('bad','You are badly behind the frontier. Enterprise customers are quietly migrating.');
   if(S.obsStreak>=obsWeeks()) return endGame(false, 'OBSOLESCENCE',
     'ATLAS-1 became a punchline. Acquired for parts by '+S.rivals.find(r=>r.q===bestRival).name+'.');
-  if(S.mode==='simple' && S.rlStreak>=4) return endGame(false, 'SERVICE COLLAPSE',
-    'Four straight weeks of rate limits. The subreddit\'s pinned post is a migration guide. The users left first; the board followed.');
+  if(S.mode==='simple' && S.rlStreak>=4){
+    const launchStorm = S.shipped && (S.week - S.shipWeek) <= 7;
+    return endGame(false, 'SERVICE COLLAPSE', launchStorm
+      ? 'ATLAS-2 was too good. The entire internet showed up inside a fortnight and no allocation could serve it. Four straight weeks of rate limits — the greatest launch in the lab\'s history, spent returning 529s.'
+      : 'Four straight weeks of rate limits. The subreddit\'s pinned post is a migration guide. The users left first; the board followed.');
+  }
   if(S.shipped){
     S.postShip++;
     if(util > 0.97) S.surgeFail++;
@@ -744,7 +775,8 @@ function tick(){
 }
 
 const Q_END = 26;                     // Ep.0: H1 ends here (26 weeks), win or lose
-const EP0_MARKET_CAP = 28.5;          // Ep.0 addressable market, T tok/wk (< max fleet capacity, so full reallocation can always restore service)
+const EP0_MARKET_CAP = 28.5;          // Ep.0 addressable market, T tok/wk (< max fleet capacity, so full reallocation can restore service in steady state)
+const EP0_SURGE_CAP = 42;             // during the 6-week launch surge the ceiling lifts — a hot launch CAN exceed anything the fleet can serve
 function flopLimit(){ return 4; }     // full mode only; Ep.0 uses the 4-consecutive-weeks service-collapse rule
 function obsLimit(){ return S.mode==='simple' ? 15 : 22; }
 function obsWeeks(){ return S.mode==='simple' ? 6 : 10; }
@@ -752,9 +784,14 @@ function shipModel(){
   S.shipped = true; S.shipWeek = S.week;
   const bonus = S.insights/25000;
   S.quality += 20 + bonus;
-  S.demand *= (S.mode==='simple' ? 1.15 : 1.3); S.surgeWeeks = 6;
+  let mult = 1.3;
+  if(S.mode==='simple'){
+    mult = 1.35 + rnd()*0.65;                // launch size is a roulette (×1.35–2.0)…
+    if(rnd() < 0.12) mult += 0.35;           // …with a 12% "monster launch" tail (up to ×2.35)
+  }
+  S.demand *= mult; S.surgeWeeks = 6;
   const bonusTxt = S.mode==='simple' ? '' : ' (research bonus +'+bonus.toFixed(1)+')';
-  log('good','★★★ ATLAS-2 SHIPS. Capability +'+ (20+bonus).toFixed(1)+bonusTxt+'. Demand '+(S.mode==='simple'?'+15%':'+30%')+' overnight and surging. NOW YOU HAVE TO SERVE IT — the training fleet just freed up, reallocate it. '+(S.mode==='simple' ? 'Four straight rate-limited weeks is still game over: hold to W'+Q_END+'.' : 'Rate-limit '+flopLimit()+' of the next 8 weeks and the launch flops.'));
+  log('good','★★★ ATLAS-2 SHIPS. Capability +'+ (20+bonus).toFixed(1)+bonusTxt+'. Demand +'+Math.round((mult-1)*100)+'% overnight and surging. NOW YOU HAVE TO SERVE IT — the training fleet just freed up, reallocate it. '+(S.mode==='simple' ? 'Four straight rate-limited weeks is still game over: hold to W'+Q_END+'.' : 'Rate-limit '+flopLimit()+' of the next 8 weeks and the launch flops.'));
   $('tr-title').textContent = 'Training Run — ATLAS-2 [SHIPPED]';
 }
 
@@ -795,8 +832,10 @@ function runEvents(resShare, util){
           'A screenshot of ATLAS-1 refactoring a 40k-line codebase goes viral.',
           'Menlo Research has a 14-hour outage; their refugees pour in.',
           'A Fortune 100 rolls ATLAS-1 out to every employee overnight.'];
-        const mult = 1.10 + rnd()*0.08;
-        S.demand = Math.min(S.demand*mult, EP0_MARKET_CAP);
+        const mult = 1.15 + rnd()*0.15;
+        const before = S.demand;
+        S.demand = Math.min(S.demand*mult, S.surgeWeeks>0 ? EP0_SURGE_CAP : EP0_MARKET_CAP);
+        S.spikeBleed += (S.demand - before)*0.5;   // half of spike traffic is tourists
         S.eventCooldown = 3;
         log('warn','⚡ TRAFFIC SPIKE — '+flavors[Math.floor(rnd()*flavors.length)]+' Demand +'+Math.round((mult-1)*100)+'% overnight.');
       } else if(roll < 0.16){
@@ -1158,7 +1197,7 @@ const TUT_STEPS = [
   {t:'SERVE YOUR USERS', h:'Token demand grows every week. Watch <b>UTILIZATION</b> in the Product panel: above <b>97%</b> you are rate-limiting — growth stalls and users churn to rivals, permanently.<br><br>'+
     '<b>Rate-limit 4 weeks in a row and the game is over</b> (Service Collapse). The <b>RATE LIMITS</b> pips in the Objective panel are that death clock.'},
   {t:'SHIP BEFORE THE CLOCK', h:'Rivals improve every week. Sit <b>15+ capability points behind for 6 weeks</b> and you are acquired — the <b>FRONTIER GAP</b> pips. And ATLAS-2 must ship before <b>H1 ends at W26</b>; the timeline bar tracks both.<br><br>'+
-    'When it ships, demand surges — and the training fleet frees up that instant. <b>Reallocate it to inference immediately</b> or your own launch will kill you.'},
+    'When it ships, demand surges — and the training fleet frees up that instant. <b>Reallocate it to inference immediately</b> or your own launch will kill you. And know this: launch size is a roulette. <b>Some storms are bigger than your fleet.</b> Shipping while your product is still small keeps the storm survivable.'},
   {t:'CONTROLS', h:'The game starts <b>paused</b>. <b>STEP ▸</b> advances one week at a time — recommended for your first run. <b>▸ 1×</b> runs in real time; pause whenever you like.<br><br>'+
     'Expect the unexpected: traffic spikes and rival breakthroughs arrive without warning. Good luck, CEO.'},
 ];
