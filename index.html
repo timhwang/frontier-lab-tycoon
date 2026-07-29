@@ -123,6 +123,8 @@
   .pip.on{background:var(--bad); border-color:var(--bad);}
   #obj-timeline{position:relative; margin-top:6px;}
   #tl-eta{position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--amber);}
+  #al-splitbar{margin-top:6px;}
+  #al-split-target{position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--txt);}
 
   #modeoverlay{position:fixed; inset:0; background:rgba(5,7,12,.94); display:none; align-items:center; justify-content:center; z-index:60;}
   #modeoverlay .box{background:var(--panel); border:2px solid var(--amber); max-width:640px; padding:22px;}
@@ -175,6 +177,9 @@
             <input type="range" id="al-train" min="0" max="100" value="40">
             <span class="out" id="al-train-out"></span>
           </div>
+          <div class="bar" id="al-splitbar" title="Fleet split — amber = inference (where the GPUs actually are), dark = training. The marker is your target; the fill migrates toward it ~8%/wk.">
+            <div class="fill" id="al-split-fill"></div><div id="al-split-target"></div>
+          </div>
           <div class="dm" id="al-note" style="font-size:10px; margin-top:2px;"></div>
         </div>
       </div>
@@ -188,9 +193,13 @@
             <tr class="total"><td class="lbl">Total fleet</td><td class="num" id="f-total"></td></tr>
           </table>
           <div id="f-incoming" class="dm full-only" style="margin-top:4px; font-size:11px;"></div>
-          <button id="btn-lease" class="full-only" style="width:100%; margin-top:6px;" onclick="orderLease()"
-            title="Order 5,000 leased H100e: $60M signing fee now, then $2.75M/wk for the 26-week term. 6-week provisioning lead time. Provider capacity is finite: max 15,000 leased at once.">
-            LEASE +5,000 H100e ($60M + $2.75M/wk)</button>
+          <button id="btn-lease-inf" class="full-only" style="width:100%; margin-top:6px;" onclick="orderLease('inf')"
+            title="Order 5,000 leased H100e pointed at SERVING: $60M signing fee now, then $2.75M/wk for the 26-week term. 6-week lead. Arrives already on inference — no migration delay. Provider cap: 15,000 leased at once.">
+            LEASE +5,000 → INFERENCE</button>
+          <button id="btn-lease-train" class="full-only" style="width:100%; margin-top:4px;" onclick="orderLease('train')"
+            title="Order 5,000 leased H100e pointed at TRAINING: $60M signing fee now, then $2.75M/wk for the 26-week term. 6-week lead. Arrives already on training — no migration delay, but splicing new GPUs into a LIVE run re-shards it for a week.">
+            LEASE +5,000 → TRAINING</button>
+          <div class="dm full-only" style="font-size:10px; margin-top:3px;">$60M signing + $2.75M/wk per block · 6wk lead · 26wk term</div>
         </div>
       </div>
 
@@ -380,6 +389,7 @@ function initState(){ return {
   spikeBleed: 0,                            // transient share of spike traffic still to fade back out
   quality: 62,
   progress: 0, req: runReq(),               // effective H100e-weeks per run
+  lastTrainC: null,                         // for absolute-delta re-shard detection
   runActive: MODE==='simple',               // Ep.0: run auto-started; Ep.1: you kick it off
   resharding: false,
   modelN: 2, ships: 0,
@@ -427,16 +437,28 @@ function servingModel(){ return 'ATLAS-'+(S.ships+1); }
 
 // ============================================================ actions
 function leasedAndPending(){ return S.leased + S.leaseOrders.reduce((a,o)=>a+o.amt,0); }
-function orderLease(){
+function orderLease(dest){
   if(S.gameOver || S.mode==='simple') return;
+  dest = dest==='train' ? 'train' : 'inf';
   if(leasedAndPending() + 5000 > LEASE_CAP){
     log('warn','Cloud provider: "No H100 capacity available this quarter." Lease market is sold out (cap 15,000).');
     render(); return;
   }
   S.cash -= LEASE_FEE;
-  S.leaseOrders.push({lead:6, amt:5000});
-  log('info','Lease signed: −$'+LEASE_FEE+'M fee now, +5,000 H100e live in 6 weeks ($2.75M/wk, 26-wk term).');
+  S.leaseOrders.push({lead:6, amt:5000, dest});
+  log('info','Lease signed: −$'+LEASE_FEE+'M fee now, +5,000 H100e live in 6 weeks → '+(dest==='train'?'TRAINING':'INFERENCE')+' ($2.75M/wk, 26-wk term).');
   render();
+}
+// fold newly-arrived capacity straight into its destination job: both the actual split and the
+// target are re-based so the new GPUs need no migration and the old fleet's division is untouched
+function absorbCapacity(amt, dest, fleetBefore){
+  const fleetAfter = fleetBefore + amt;
+  const addT = dest==='train' ? amt : 0;
+  S.actual.train = clamp((S.actual.train*fleetBefore + addT)/fleetAfter, 0, 1);
+  S.actual.inf = 1 - S.actual.train;
+  S.alloc.train = clamp((S.alloc.train*fleetBefore + addT)/fleetAfter, 0, 1);
+  S.alloc.inf = 1 - S.alloc.train;
+  renderAlloc();
 }
 function startRun(){
   if(S.gameOver || S.runActive || S.mode==='simple') return;
@@ -452,7 +474,7 @@ function startRun(){
 let anim = null, animTimer = null;
 const lerp = (p,c,a)=>p+(c-p)*a;
 function snapshotView(){
-  return {week:S.week, cash:S.cash, demand:S.demand, cap:S.lastCapacity, rev:S.lastRevenue, prog:S.progress};
+  return {week:S.week, cash:S.cash, demand:S.demand, cap:S.lastCapacity, rev:S.lastRevenue, prog:S.progress, actInf:S.actual.inf};
 }
 function killAnim(){
   if(animTimer){ clearInterval(animTimer); animTimer = null; }
@@ -493,6 +515,7 @@ function lerpApply(a){
   $('tl-fill').style.width = Math.min(100, wf/horizon()*100)+'%';
   $('hz-cash-bar').style.width = Math.max(0, Math.min(100, cash/startCash()*100))+'%';
   $('hz-cash-val').textContent = fmtM(cash);
+  $('al-split-fill').style.width = (lerp(p.actInf, S.actual.inf, a)*100).toFixed(2)+'%';
 }
 
 // ============================================================ core tick
@@ -503,11 +526,18 @@ function tick(){
 
   // -------- fleet: deliveries, lease arrivals/expiries
   const del = S.deliveries[S.week];
-  if(del){ S.owned += del.amt; log('good', del.label+': +'+fmtK(del.amt)+' H100e (owned).'); }
+  if(del){
+    const before = S.owned + S.leases.reduce((a,l)=>a+l.amt,0);
+    S.owned += del.amt;
+    if(S.mode!=='simple') absorbCapacity(del.amt, 'inf', before);   // owned tranches arrive pointed at serving
+    log('good', del.label+': +'+fmtK(del.amt)+' H100e (owned, → inference).');
+  }
   S.leaseOrders.forEach(o=>o.lead--);
   S.leaseOrders.filter(o=>o.lead<=0).forEach(o=>{
+    const before = S.owned + S.leases.reduce((a,l)=>a+l.amt,0);
     S.leases.push({amt:o.amt, termLeft:26});
-    log('good','Leased capacity live: +'+fmtK(o.amt)+' H100e.');
+    absorbCapacity(o.amt, o.dest, before);
+    log('good','Leased capacity live: +'+fmtK(o.amt)+' H100e → '+(o.dest==='train'?'TRAINING':'INFERENCE')+'.');
   });
   S.leaseOrders = S.leaseOrders.filter(o=>o.lead>0);
   S.leases.forEach(l=>l.termLeft--);
@@ -517,21 +547,25 @@ function tick(){
 
   const fleet = S.owned + S.leased;
 
-  // -------- allocation friction (Ep.1): GPUs migrate toward the target ~6%/wk
+  // -------- allocation friction (Ep.1): GPUs migrate toward the target ~8%/wk
   if(S.mode==='simple'){
     S.actual = {...S.alloc};
     S.resharding = false;
   } else {
-    const prevTrain = S.actual.train;
     const step = clamp(S.alloc.inf - S.actual.inf, -MIGRATE, MIGRATE);
     S.actual.inf = clamp(S.actual.inf + step, 0, 1);
     S.actual.train = 1 - S.actual.inf;
-    const resizing = Math.abs(S.actual.train - prevTrain) > 0.005;
+  }
+  const infC = fleet*S.actual.inf, trainC = fleet*S.actual.train;
+  if(S.mode!=='simple'){
+    // re-sharding keys on the run's ABSOLUTE compute changing (migration, leases→training,
+    // lease expiries) — capacity arriving on the inference side doesn't touch the run
+    const resizing = S.lastTrainC!==null && Math.abs(trainC - S.lastTrainC) > 250;
     if(resizing && S.runActive && !S.resharding)
       log('warn','Re-sharding ATLAS-'+S.modelN+' to the new world size — the run makes no progress while its allocation is changing.');
     S.resharding = S.runActive && resizing;
+    S.lastTrainC = trainC;
   }
-  const infC = fleet*S.actual.inf, trainC = fleet*S.actual.train;
 
   // -------- post-training polish
   S.quality += 0.08;
@@ -766,20 +800,23 @@ function render(){
   $('t-lead').textContent = (lead>=0?'+':'')+lead.toFixed(1);
   $('t-lead').className = 'val '+(lead>=0?'pos':(lead>-10?'wrn':'neg'));
 
-  // allocation readouts: target, plus actual while migrating (Ep.1)
+  // allocation readouts: target % + where the GPUs actually are (count); split bar shows the drift
   const migrating = Math.abs(S.actual.inf - S.alloc.inf) > 0.005;
-  const outTxt = (key)=>{
-    const tgt = Math.round(S.alloc[key]*100), act = Math.round(S.actual[key]*100);
-    return migrating ? act+'%→'+tgt+'% · '+fmtK(fleet*S.actual[key]) : tgt+'% · '+fmtK(fleet*S.actual[key]);
-  };
-  $('al-inf-out').textContent = outTxt('inf');
-  $('al-train-out').textContent = outTxt('train');
+  $('al-inf-out').textContent = Math.round(S.alloc.inf*100)+'% · '+fmtK(fleet*S.actual.inf);
+  $('al-train-out').textContent = Math.round(S.alloc.train*100)+'% · '+fmtK(fleet*S.actual.train);
+  $('al-split-fill').style.width = (S.actual.inf*100).toFixed(1)+'%';
+  $('al-split-target').style.left = Math.min(99, S.alloc.inf*100)+'%';
+  $('al-split-target').style.display = migrating ? '' : 'none';
+  const migWeeks = Math.ceil(Math.abs(S.alloc.inf - S.actual.inf)/MIGRATE);
   $('al-note').textContent = S.mode==='simple' ? ''
-    : (migrating ? '⇄ migrating ~'+Math.round(MIGRATE*100)+'%/wk toward target'+(S.runActive?' — run stalled while resizing':'') : '');
+    : (migrating ? '⇄ ~'+migWeeks+'wk to target'+(S.runActive?' — run stalled while resizing':'') : '');
 
   // fleet
-  $('btn-lease').disabled = leasedAndPending() + 5000 > LEASE_CAP || S.cash < LEASE_FEE;
-  $('btn-lease').textContent = (leasedAndPending() + 5000 > LEASE_CAP) ? 'LEASE MARKET SOLD OUT' : 'LEASE +5,000 H100e ($60M + $2.75M/wk)';
+  const soldOut = leasedAndPending() + 5000 > LEASE_CAP, broke = S.cash < LEASE_FEE;
+  [['btn-lease-inf','LEASE +5,000 → INFERENCE'],['btn-lease-train','LEASE +5,000 → TRAINING']].forEach(([id, lbl])=>{
+    $(id).disabled = soldOut || broke;
+    $(id).textContent = soldOut ? 'LEASE MARKET SOLD OUT' : lbl;
+  });
   $('f-owned').textContent = fmtK(S.owned);
   $('f-leased').textContent = fmtK(S.leased);
   $('f-total').textContent = fmtK(fleet);
@@ -808,15 +845,19 @@ function render(){
 
   // training
   $('tr-title').textContent = S.runActive ? 'Training Run — ATLAS-'+S.modelN : 'Training — no active run';
+  const previewRate = fleet*S.alloc.train;                       // duration at the TARGET split
+  const previewEta = previewRate>0 ? Math.ceil(S.req/previewRate) : null;
   $('btn-kickoff').style.display = (S.mode!=='simple' && !S.runActive && !S.gameOver) ? '' : 'none';
-  $('btn-kickoff').textContent = '▶ START PRETRAINING RUN — ATLAS-'+S.modelN;
+  $('btn-kickoff').textContent = '▶ START ATLAS-'+S.modelN+' RUN — ~'+(previewEta ? previewEta+' wk' : '∞')+' at this split';
   const prog = S.runActive ? Math.min(1, S.progress/S.req) : 0;
   $('tr-bar').style.width = (prog*100).toFixed(1)+'%';
   $('tr-prog').textContent = S.runActive ? fmtK(S.progress)+' / '+fmtK(S.req)+' ('+(prog*100).toFixed(1)+'%)' : '—';
   const rateEst = S.lastRate>0 ? S.lastRate : fleet*S.actual.train;
   const eta = (S.runActive && rateEst>0) ? Math.ceil((S.req-S.progress)/rateEst) : null;
-  $('tr-eta').textContent = S.runActive ? (eta ? '~'+eta+' wk' : '∞ (no compute)') : '—';
-  cls($('tr-eta'), S.runActive && eta===null ? 'neg' : '');
+  $('tr-eta').textContent = S.runActive
+    ? (eta ? '~'+eta+' wk' : '∞ (no compute)')
+    : (S.mode!=='simple' && previewEta ? '~'+previewEta+' wk if started' : '—');
+  cls($('tr-eta'), S.runActive && eta===null ? 'neg' : (!S.runActive ? 'dm' : ''));
   $('tr-rate').textContent = S.runActive ? fmtK(S.lastRate)+' /wk' : '—';
   $('tr-status').textContent = !S.runActive
     ? (S.mode==='simple' ? '—' : 'idle — training compute does nothing')
@@ -854,7 +895,7 @@ function render(){
   } else {
     const runTxt = S.runActive
       ? 'ATLAS-'+S.modelN+' ETA ≈ W'+(eta ? S.week+eta : '∞')+'.'
-      : '<span class="'+(S.ships>=2?'dm':'neg')+'">No active training run.</span>';
+      : '<span class="'+(S.ships>=2?'dm':'neg')+'">No active run'+(previewEta ? ' — ATLAS-'+S.modelN+' would take ~'+previewEta+'wk at this split' : '')+'.</span>';
     winLine = '<b>WIN:</b> survive the year (<b>W52</b>). Rivals will not wait — expect to need <b>two successful ships</b>. '+runTxt;
   }
   $('obj-body').innerHTML = winLine;
@@ -948,7 +989,7 @@ function resetGame(){
   } else {
     log('sys','FRONTIER LAB TYCOON — EPISODE 1: THE LONG YEAR');
     log('sys','52 weeks. Rivals are faster now, and one ship will not hold the frontier — plan for two. Training compute idles until you START a run; final evals decide what each run is worth.');
-    log('info','The slider is a target: GPUs migrate ~6%/wk, and resizing a live run re-shards it (zero progress that week). Set the split, let it settle, then kick off.');
+    log('info','The slider is a target: GPUs migrate ~8%/wk, and resizing a live run re-shards it (zero progress that week). Set the split, let it settle, then kick off.');
     log('info','The lab starts unprofitable. Leases can grow the fleet ($60M + $2.75M/wk per 5,000) — and can bankrupt you. Same three death clocks: cash, frontier gap, rate limits.');
   }
   render();
@@ -1002,13 +1043,13 @@ const TUT = {
       'You now play <b>52 weeks</b>, and you win by <b>surviving to W52</b>.<br>'+
       'Rivals are <b>faster and jumpier</b> — one ship will not hold the frontier for a year. <b>Plan for two.</b>'},
     {t:'THE RUN IS A DECISION', h:'Training compute now <b>does nothing until you press ▶ START PRETRAINING RUN</b> (Training panel). Each run consumes <b>220k H100e-weeks</b> at whatever allocation you hold.<br><br>'+
-      'After a ship — or a failure — you can start the next one. The year is long enough for two runs <b>only if you do not dawdle</b>.'},
+      'The kickoff button previews how long the run would take at your current split — the duration is set by how much compute you give it. After a ship — or a failure — you can start the next one. The year is long enough for two runs <b>only if you do not dawdle</b>.'},
     {t:'FRICTION', h:'The slider is now a <b>target</b>. GPUs physically migrate between serving and training at about <b>8% of the fleet per week</b>.<br><br>'+
       'And resizing a <b>live</b> run re-shards it: <b>zero progress any week its allocation is changing</b>. The discipline: set the split, let it finish migrating, <i>then</i> kick off — and plan launch-day reallocation knowing it takes weeks, not an instant.<br><br>(Mercy: only <b>severe</b> under-service — utilization above <b>110%</b> — ticks the collapse clock here, and the fuse is <b>6 weeks</b>. Mild rate-limiting just bleeds users and growth.)'},
     {t:'EVALS ARE A ROULETTE', h:'No more guaranteed +20. A run\'s payoff is unknown until final evals:<br><br>'+
       '~60%: <b>solid</b> (+15–24) · ~15%: <b class="pos">step change</b> (+27–35)<br>~17%: <b>dud</b> (+3–7, tiny launch) · ~8%: <b class="neg">total failure</b> — nothing ships, the compute is simply gone.<br><br>'+
       'A failed or flat run is not the end — it is the signal to start the next one <i>immediately</i>.'},
-    {t:'LEASES & SOLVENCY', h:'The fleet can grow now: <b>LEASE +5,000 H100e</b> costs <b>$60M up front</b> plus $2.75M/wk for a 26-week term (6-week lead, market cap 15,000). Owned tranches also arrive W20 and W40.<br><br>'+
+    {t:'LEASES & SOLVENCY', h:'The fleet can grow now: <b>LEASE +5,000 H100e</b> costs <b>$60M up front</b> plus $2.75M/wk for a 26-week term (6-week lead, market cap 15,000). You choose at signing whether a block arrives pointed at <b>INFERENCE or TRAINING</b> — no migration delay either way, though splicing fresh GPUs into a live run still re-shards it for a week. Owned tranches also arrive W20 and W40 (pointed at inference).<br><br>'+
       'But the lab <b>starts unprofitable</b> and cash is a real clock. Lease ahead of demand and you print money; lease into a dud and you die of payroll. Good luck, CEO.'},
   ],
 };
