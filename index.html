@@ -123,8 +123,12 @@
   .pip.on{background:var(--bad); border-color:var(--bad);}
   #obj-timeline{position:relative; margin-top:6px;}
   #tl-eta{position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--amber);}
-  #al-splitbar{margin-top:6px;}
+  /* split bar: blue = inference, amber = training — matches capacity (blue) and run-progress (amber) colors */
+  #al-splitbar{margin-top:6px; background:var(--amber);}
+  #al-split-fill{background:var(--blue);}
   #al-split-target{position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--txt);}
+  #al-inf{accent-color:var(--blue);}
+  #al-train{accent-color:var(--amber);}
 
   #modeoverlay{position:fixed; inset:0; background:rgba(5,7,12,.94); display:none; align-items:center; justify-content:center; z-index:60;}
   #modeoverlay .box{background:var(--panel); border:2px solid var(--amber); max-width:640px; padding:22px;}
@@ -168,16 +172,16 @@
         <h3>Compute Allocation</h3>
         <div class="body">
           <div class="sliderrow">
-            <span class="name" title="Serves product traffic. Capacity(T tok/wk) = H100e × 0.001.">INFERENCE</span>
+            <span class="name" style="color:var(--blue)" title="Serves product traffic. Capacity(T tok/wk) = H100e × 0.001.">INFERENCE</span>
             <input type="range" id="al-inf" min="0" max="100" value="60">
             <span class="out" id="al-inf-out"></span>
           </div>
           <div class="sliderrow">
-            <span class="name" id="al-train-name" title="Feeds the active training run. Progress/wk = H100e allocated.">TRAINING</span>
+            <span class="name" id="al-train-name" style="color:var(--amber)" title="Feeds the active training run. Progress/wk = H100e allocated.">TRAINING</span>
             <input type="range" id="al-train" min="0" max="100" value="40">
             <span class="out" id="al-train-out"></span>
           </div>
-          <div class="bar" id="al-splitbar" title="Fleet split — amber = inference (where the GPUs actually are), dark = training. The marker is your target; the fill migrates toward it ~8%/wk.">
+          <div class="bar" id="al-splitbar" title="Fleet split — blue = inference, amber = training (where the GPUs actually are). The white marker is your target; the boundary migrates toward it ~8%/wk.">
             <div class="fill" id="al-split-fill"></div><div id="al-split-target"></div>
           </div>
           <div class="dm" id="al-note" style="font-size:10px; margin-top:2px;"></div>
