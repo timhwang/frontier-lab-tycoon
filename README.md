@@ -29,7 +29,7 @@ Everything Episode 0 taught, for 52 weeks — and one ship won't hold the fronti
 - **Friction.** The slider is a target: GPUs migrate ~8% of the fleet per week, and resizing a *live* run re-shards it — zero progress any week its allocation is changing.
 - **Evals are a roulette.** ~60% solid (+15–24), ~15% step change, ~17% dud, ~8% total failure — the compute is simply gone.
 - **Leases.** Grow the fleet — but the market is thin: each additional concurrent 5,000-GPU block costs more ($60M + $2.75M/wk up to $170M + $5.8M/wk), 6-week lead, 26-week terms, chosen at signing to arrive on inference or training. The lab starts with $500M and loses money; cash is a real clock.
-- **Faster rivals**, and a saturating ~45T addressable market — a bigger fleet buys genuine training headroom.
+- **Faster rivals**, all eating from one shared ~75T market with you (live market-share bar) — growth damps as it fills, and share only moves by taking it.
 - Mercy where friction demands it: only severe under-service (>110% utilization) ticks the 6-week collapse fuse.
 
 ## Episode 2 — Other People's Money
@@ -38,7 +38,7 @@ Episode 1 plus the money game, against the fiercest rivals (difficulty scales ea
 
 - **You set the price.** One product, one slider: cheap grows the market, pricey milks it. The margin is thin — you can't out-earn the early burn at any price.
 - **The GPU spot market.** Lease pricing rides a market index (×0.55–1.9) with occasional hard gaps — fee and rate are multiplied at signing and locked for the term. Steal a dip or get burned at a spike.
-- **Fundraising.** Opens only on KPIs (demand ≥ 14T, capability gap ≥ −12, 12-week cooldown); terms track demand, lead, growth, and recent ships. The lab starts with $400M and a structural burn: raise or die.
+- **Fundraising.** Opens only on KPIs (demand ≥ 12T, capability gap ≥ −12, 12-week cooldown); terms track demand, lead, growth, and recent ships. The lab starts with $400M and a structural burn: raise or die.
 
 Also in Episode 1+: allocation friction is asymmetric — standing up training pods is slow (~8%/wk), draining them back to serving is fast (~25%/wk).
 
