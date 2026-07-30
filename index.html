@@ -334,6 +334,7 @@
           <table id="rivals">
             <tr><th style="text-align:left;color:var(--dim);font-size:10px;">LAB</th>
                 <th style="text-align:right;color:var(--dim);font-size:10px;" title="Abstract frontier-capability index (think blended evals + vibes).">CAPABILITY</th>
+                <th class="ep2-only" style="text-align:right;color:var(--dim);font-size:10px;" title="Blended $/Mtok. Customers weigh capability against price — value = capability − 3×price.">PRICE</th>
                 <th style="text-align:right;color:var(--dim);font-size:10px;">Δ vs YOU</th>
                 <th style="text-align:right;color:var(--dim);font-size:10px;">LAST SHIP</th></tr>
           </table>
@@ -355,7 +356,7 @@
             <b>The frontier:</b> rivals improve every week and ship jumps; 15+ points behind for 6 straight weeks and you are acquired.<br><br>
             <b>Episode 0 (The Trade):</b> 26 weeks, run auto-started, flat +20 on ship, fixed fleet. Ship it, then hold service to the bell.<br><br>
             <b>Episode 1 (The Long Year):</b> 52 weeks; win by surviving to W52 — you will likely need TWO successful ships. Training compute idles until you START a run. The slider is a target with asymmetric friction: pods stand up to training slowly (~8%/wk) but drain to serving fast (~25%/wk); resizing a live run re-shards it (zero progress that week). The payoff is unknown until final evals: usually +15–24, sometimes a step change, sometimes a dud, rarely (~1 in 12) a total failure. Leases grow the fleet, but the market is thin — each additional concurrent block costs more ($60M+$2.75M/wk, then $110M+$4.2M/wk, then $170M+$5.8M/wk; 6-wk lead, 26-wk terms, max 15,000) — and cash is a real clock: $500M to start and the lab loses money.<br><br>
-            <b>Episode 2 (Other People's Money):</b> Episode 1 plus the money game, against the fiercest rivals. You set the product price ($/Mtok: cheap grows demand, pricey stalls it). Lease pricing rides a spot-market index (×0.55–1.9, applied to fee and rate at signing, locked per block). Fundraising unlocks on KPIs (demand ≥ 14T, gap ≥ −12, 12-wk cooldown) with terms that track demand, lead, growth, and recent ships. $400M to start; the burn is structural — raise or die.
+            <b>Episode 2 (Other People's Money):</b> Episode 1 plus the money game, against the fiercest rivals. You set the product price, and demand follows <i>value for money</i>: capability − 3×price, versus the best rival offer — rivals price too, cutting when they trail and waging occasional price wars. Lease pricing rides a spot-market index (×0.55–1.9, applied to fee and rate at signing, locked per block). Fundraising unlocks on KPIs (demand ≥ 14T, gap ≥ −12, 12-wk cooldown) with terms that track demand, lead, growth, and recent ships. $400M to start; the burn is structural — raise or die.
           </div>
         </details>
       </div>
@@ -413,6 +414,9 @@ function horizon(){ return S.mode==='simple' ? 26 : 52; }
 function runReq(){ return MODE==='simple' ? 220000 : 180000; }   // Ep.1+ runs are leaner: ~3 attempts fit in a year
 function rlLimit(){ return S.mode==='simple' ? 4 : 6; }          // friction earns Ep.1+ a longer collapse fuse
 function leaseMkt(){ return S.mode==='ep2' ? S.leaseMkt : 1; }   // Ep.2: spot-market multiplier on lease pricing
+const VAL_K = 3;                                                 // Ep.2: $1/Mtok of price ≈ 3 capability points of customer appeal
+function valScore(q, p){ return q - VAL_K*p; }
+function bestRivalVal(){ return Math.max(...S.rivals.map(r=>valScore(r.q, r.price))); }
 function startCash(){ return S.mode==='simple' ? 1600 : (S.mode==='ep2' ? 400 : 500); }
 function marketCap(){ return S.mode==='simple' ? 28.5 : 45; }
 function surgeCap(){ return S.mode==='simple' ? 42 : 70; }
@@ -444,9 +448,9 @@ function initState(){ return {
   lastNet: 0, lastGrowth: 0, lastRate: 0, lastServed: 0, lastCapacity: 0, lastOverflow: 0, lastRevenue: 0, lastChurn: 0,
   eventCooldown: 0,
   rivals: [
-    {name:'Menlo Research', q:60, timer:20, lastShip:'—'},
-    {name:'Axiom AI',       q:56, timer:30, lastShip:'—'},
-    {name:'Tengri Compute', q:52, timer:26, lastShip:'—'},
+    {name:'Menlo Research', q:60, price:3.6, timer:20, lastShip:'—'},   // the leader charges for it
+    {name:'Axiom AI',       q:56, price:3.1, timer:30, lastShip:'—'},
+    {name:'Tengri Compute', q:52, price:2.6, timer:26, lastShip:'—'},   // the laggard competes on price
   ],
   deliveries: MODE==='simple' ? {} :
               {20:{amt:6000,label:'Contracted H100e tranche energized'},
@@ -516,7 +520,7 @@ function fundOffer(){
   const recentShip = S.shipped && (S.week - S.shipWeek) <= 10;
   const kpi = {dem: S.demand >= 14, gap: lead >= -12, cd: (S.week - S.lastRaiseWeek) >= 12};
   const eligible = S.mode==='ep2' && !S.gameOver && kpi.dem && kpi.gap && kpi.cd;
-  const amount = Math.round(clamp(S.demand*18 + clamp(lead,-10,30)*15 + (recentShip?150:0) + S.lastGrowth*3000, 150, 1500));
+  const amount = Math.round(clamp(S.demand*22 + clamp(lead,-10,30)*15 + (recentShip?150:0) + S.lastGrowth*3000, 150, 1500));
   const mood = (lead>5 && S.lastGrowth>0.015) ? 'HOT' : (lead>=-5 ? 'FAIR' : 'WARY');
   return {eligible, kpi, amount, mood};
 }
@@ -665,6 +669,7 @@ function tick(){
     if(r.timer<=0){
       const jump = S.mode==='simple' ? 5.5 : (S.mode==='ep2' ? 5 + rnd()*3.5 : 5 + rnd()*3);
       r.q += jump; r.timer = S.mode==='simple' ? 24 : (S.mode==='ep2' ? 20 + Math.floor(rnd()*8) : 22 + Math.floor(rnd()*8)); r.lastShip = 'W'+S.week;
+      if(S.mode==='ep2') r.price = Math.min(6, +(r.price*1.08).toFixed(2));   // fresh models charge a premium
       log('warn', r.name.toUpperCase()+' ships a new frontier model (capability '+r.q.toFixed(0)+').');
       if(r.q > S.quality){
         S.demand *= 0.93;
@@ -672,6 +677,13 @@ function tick(){
       }
     }
   });
+  if(S.mode==='ep2'){
+    // price competition: rivals trailing the market's best value quietly cut prices
+    const marketBest = Math.max(bestRivalVal(), valScore(S.quality, S.price));
+    S.rivals.forEach(r=>{
+      if(valScore(r.q, r.price) < marketBest - 7) r.price = Math.max(1.6, +(r.price*0.985).toFixed(2));
+    });
+  }
   const bestRival = Math.max(...S.rivals.map(r=>r.q));
 
   // -------- product & serving
@@ -680,8 +692,11 @@ function tick(){
   const overflow = S.demand - served;
   const util = capacity>0 ? S.demand/capacity : 99;
 
-  let growth = 0.035 + clamp((S.quality - bestRival)*0.004, -0.03, 0.035);
-  if(S.mode==='ep2') growth += 0.03*(3 - S.price)/3;      // Ep.2: price elasticity — cheap grows, pricey stalls
+  // Ep.2: customers buy VALUE (capability − k×price) relative to the best rival offer;
+  // elsewhere price is fixed and pure capability lead drives growth
+  let growth = S.mode==='ep2'
+    ? 0.035 + clamp((valScore(S.quality, S.price) - bestRivalVal())*0.004, -0.03, 0.035)
+    : 0.035 + clamp((S.quality - bestRival)*0.004, -0.03, 0.035);
   if(S.mode!=='simple' && growth > 0)
     growth *= Math.max(0.05, 1 - S.demand/marketCap());   // Ep.1+: the addressable market saturates
   const surging = S.surgeWeeks>0;
@@ -811,6 +826,11 @@ function runEvents(){
     r.q += jump;
     S.eventCooldown = 3;
     log('bad','⚠ RIVAL BREAKTHROUGH — '+r.name+' posts shock eval results: capability +'+jump.toFixed(1)+'. The frontier just moved.');
+  } else if(S.mode==='ep2' && roll < 0.22){
+    const r = S.rivals[Math.floor(rnd()*S.rivals.length)];
+    r.price = Math.max(1.6, +(r.price*(0.75 + rnd()*0.12)).toFixed(2));
+    S.eventCooldown = 3;
+    log('bad','💥 PRICE WAR — '+r.name+' slashes to $'+r.price.toFixed(2)+'/Mtok. Your value proposition just aged a quarter overnight.');
   }
 }
 
@@ -952,7 +972,8 @@ function render(){
     cls($('f-mkt'), S.leaseMkt<0.85?'pos':(S.leaseMkt>1.25?'neg':''));
     // pricing panel
     $('pol-price-out').textContent = '$'+S.price.toFixed(2);
-    $('price-note').textContent = 'gross ≈ $'+(S.price-0.8).toFixed(2)+'/Mtok after COGS · '+(S.price<3?'growing the market':(S.price>4.5?'milking it — growth stalls':'holding'));
+    const vLead = valScore(S.quality, S.price) - bestRivalVal();
+    $('price-note').textContent = 'gross ≈ $'+(S.price-0.8).toFixed(2)+'/Mtok after COGS · value vs market: '+(vLead>=0?'+':'')+vLead.toFixed(1)+(vLead>=3?' — winning customers':(vLead<=-3?' — losing them':''));
     // fundraising panel
     const o = fundOffer();
     const chk = (el, ok, txt)=>{ $(el).textContent = txt; cls($(el), ok?'pos':'neg'); };
@@ -1080,11 +1101,11 @@ function render(){
   const tbl = $('rivals');
   while(tbl.rows.length>1) tbl.deleteRow(1);
   const you = tbl.insertRow();
-  you.innerHTML = '<td style="color:var(--amber)">YOU — '+servingModel()+'</td><td class="num" style="color:var(--amber)">'+S.quality.toFixed(1)+'</td><td class="num">—</td><td class="num">'+(S.shipped?'W'+S.shipWeek:'launch')+'</td>';
+  you.innerHTML = '<td style="color:var(--amber)">YOU — '+servingModel()+'</td><td class="num" style="color:var(--amber)">'+S.quality.toFixed(1)+'</td><td class="num ep2-only" style="color:var(--amber)">$'+S.price.toFixed(2)+'</td><td class="num">—</td><td class="num">'+(S.shipped?'W'+S.shipWeek:'launch')+'</td>';
   S.rivals.slice().sort((a,b)=>b.q-a.q).forEach(r=>{
     const row = tbl.insertRow();
     const d = r.q - S.quality;
-    row.innerHTML = '<td>'+r.name+'</td><td class="num">'+r.q.toFixed(1)+'</td><td class="num '+(d>0?'neg':'pos')+'">'+(d>0?'+':'')+d.toFixed(1)+'</td><td class="num dm">'+r.lastShip+'</td>';
+    row.innerHTML = '<td>'+r.name+'</td><td class="num">'+r.q.toFixed(1)+'</td><td class="num ep2-only">$'+r.price.toFixed(2)+'</td><td class="num '+(d>0?'neg':'pos')+'">'+(d>0?'+':'')+d.toFixed(1)+'</td><td class="num dm">'+r.lastShip+'</td>';
   });
   $('obs-warn').textContent = S.obsStreak>0 ? '▲ OBSOLESCENCE CLOCK: '+S.obsStreak+'/'+OBS_WEEKS+' weeks more than '+OBS_LIMIT+' points behind' : '';
 
@@ -1205,8 +1226,8 @@ const TUT = {
   ep2: [
     {t:'THE MONEY GAME', h:'Everything from Episode 1 applies — kickoffs, friction, eval roulette, thin leases. Three things are new:<br><br>'+
       'You set the <b>product price</b>. The <b>GPU lease market</b> moves weekly. And the gap between burn and revenue is funded by <b>investors</b> — the lab starts with just <b>$400M</b>, losing money, against the fiercest rivals yet.'},
-    {t:'PRICE THE PRODUCT', h:'The <b>PRICING</b> slider sets your blended $/Mtok. <b>Cheap grows the market</b> (demand compounds faster); <b>pricey milks it</b> (margin now, stagnation later). Serving COGS is $0.80/Mtok before GPU costs — the margin is thinner than it looks.<br><br>'+
-      'You cannot out-earn the early burn at any price. That is what the investors are for.'},
+    {t:'PRICE THE PRODUCT', h:'Customers buy <b>value for money</b>: your capability minus <b>3× your price</b>, weighed against the best rival offer — see the PRICE column in the Competitive Landscape, and the <b>value vs market</b> readout under the slider. A big capability lead lets you charge for it; a laggard has to be cheap.<br><br>'+
+      'Rivals fight back: fresh models charge premiums, trailing labs quietly cut, and <b>price wars</b> can vaporize your value lead overnight. Serving COGS is $0.80/Mtok — and no price out-earns the early burn. That is what investors are for.'},
     {t:'THE SPOT MARKET', h:'The <b>lease market index</b> (Fleet panel) drifts between ×0.55 and ×1.9 and occasionally gaps hard. Both the signing fee <b>and</b> the weekly rate are multiplied by it — and the rate you sign is <b>locked for the full 26-week term</b>.<br><br>'+
       'Lock blocks on dips and you steal capacity; panic-lease at a spike and you fund the provider\'s next datacenter.'},
     {t:'RAISE OR DIE', h:'The <b>FUNDRAISING</b> panel opens only when the KPIs impress: <b>demand ≥ 14T</b>, <b>capability gap ≥ −12</b>, and a <b>12-week cooldown</b> since the last round. The offer tracks your demand, lead, growth, and recent ships — a <b>HOT</b> market pays much better than a <b>WARY</b> one.<br><br>'+
