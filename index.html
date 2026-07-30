@@ -276,7 +276,7 @@
             <tr><td class="lbl" title="Served / demand. Above ~97% you are rate-limiting: growth penalty + 30% of overflow (up to 65% during a launch surge) churns to rivals permanently.">Utilization</td><td class="num" id="p-util"></td>
                 <td class="lbl" title="Demand you turned away this week (rate limits, queue timeouts, 529s).">Rate-limited</td><td class="num" id="p-overflow"></td></tr>
             <tr><td class="lbl">Revenue</td><td class="num" id="p-rev"></td>
-                <td class="lbl">Demand growth</td><td class="num" id="p-growth"></td></tr>
+                <td class="lbl" title="Weekly demand growth: base 3.5% + capability lead (Ep.2: value-for-money lead — capability − 3×price vs the best rival, and a badly losing value proposition shrinks demand outright). Positive growth is damped as demand approaches the addressable market.">Demand growth</td><td class="num" id="p-growth"></td></tr>
           </table>
           <div id="p-warn" class="wrn" style="font-size:11px;"></div>
         </div>
@@ -694,8 +694,10 @@ function tick(){
 
   // Ep.2: customers buy VALUE (capability − k×price) relative to the best rival offer;
   // elsewhere price is fixed and pure capability lead drives growth
+  // note the asymmetric clamp in Ep.2: a dominated offer (bad value) can shrink demand outright
+  // (floor −7.5% vs the +3.5% base), while the upside stays capped — churn is easier than acquisition
   let growth = S.mode==='ep2'
-    ? 0.035 + clamp((valScore(S.quality, S.price) - bestRivalVal())*0.004, -0.03, 0.035)
+    ? 0.035 + clamp((valScore(S.quality, S.price) - bestRivalVal())*0.004, -0.075, 0.035)
     : 0.035 + clamp((S.quality - bestRival)*0.004, -0.03, 0.035);
   if(S.mode!=='simple' && growth > 0)
     growth *= Math.max(0.05, 1 - S.demand/marketCap());   // Ep.1+: the addressable market saturates
@@ -973,7 +975,10 @@ function render(){
     // pricing panel
     $('pol-price-out').textContent = '$'+S.price.toFixed(2);
     const vLead = valScore(S.quality, S.price) - bestRivalVal();
-    $('price-note').textContent = 'gross ≈ $'+(S.price-0.8).toFixed(2)+'/Mtok after COGS · value vs market: '+(vLead>=0?'+':'')+vLead.toFixed(1)+(vLead>=3?' — winning customers':(vLead<=-3?' — losing them':''));
+    const sat = S.demand/marketCap();
+    $('price-note').textContent = 'gross ≈ $'+(S.price-0.8).toFixed(2)+'/Mtok after COGS · value vs market: '+(vLead>=0?'+':'')+vLead.toFixed(1)
+      + (sat>0.65 ? ' · market '+Math.round(sat*100)+'% saturated — price buys little growth here'
+                  : (vLead>=3?' — winning customers':(vLead<=-6?' — bleeding customers':(vLead<=-3?' — losing ground':''))));
     // fundraising panel
     const o = fundOffer();
     const chk = (el, ok, txt)=>{ $(el).textContent = txt; cls($(el), ok?'pos':'neg'); };
@@ -1226,7 +1231,7 @@ const TUT = {
   ep2: [
     {t:'THE MONEY GAME', h:'Everything from Episode 1 applies — kickoffs, friction, eval roulette, thin leases. Three things are new:<br><br>'+
       'You set the <b>product price</b>. The <b>GPU lease market</b> moves weekly. And the gap between burn and revenue is funded by <b>investors</b> — the lab starts with just <b>$400M</b>, losing money, against the fiercest rivals yet.'},
-    {t:'PRICE THE PRODUCT', h:'Customers buy <b>value for money</b>: your capability minus <b>3× your price</b>, weighed against the best rival offer — see the PRICE column in the Competitive Landscape, and the <b>value vs market</b> readout under the slider. A big capability lead lets you charge for it; a laggard has to be cheap.<br><br>'+
+    {t:'PRICE THE PRODUCT', h:'Customers buy <b>value for money</b>: your capability minus <b>3× your price</b>, weighed against the best rival offer — see the PRICE column in the Competitive Landscape, and the <b>value vs market</b> readout under the slider. A big capability lead lets you charge for it; a laggard has to be cheap — and a <b>badly losing value proposition bleeds demand outright</b>. Late in the game, watch saturation: once the market is nearly full, no price buys growth.<br><br>'+
       'Rivals fight back: fresh models charge premiums, trailing labs quietly cut, and <b>price wars</b> can vaporize your value lead overnight. Serving COGS is $0.80/Mtok — and no price out-earns the early burn. That is what investors are for.'},
     {t:'THE SPOT MARKET', h:'The <b>lease market index</b> (Fleet panel) drifts between ×0.55 and ×1.9 and occasionally gaps hard. Both the signing fee <b>and</b> the weekly rate are multiplied by it — and the rate you sign is <b>locked for the full 26-week term</b>.<br><br>'+
       'Lock blocks on dips and you steal capacity; panic-lease at a spike and you fund the provider\'s next datacenter.'},
