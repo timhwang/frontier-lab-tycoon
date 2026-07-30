@@ -2,7 +2,7 @@
 
 A Paradox-style spreadsheet game about the central bind of running a frontier AI lab: one fleet of GPUs, two jobs. Every H100e serving your shipped model is one not training the next one.
 
-**[▶ Play it here](https://timhwang.github.io/frontier-lab-tycoon/)** — or deeplink an episode: [Episode 0 — The Trade](https://timhwang.github.io/frontier-lab-tycoon/?ep=0) · [Episode 1 — The Long Year](https://timhwang.github.io/frontier-lab-tycoon/?ep=1)
+**[▶ Play it here](https://timhwang.github.io/frontier-lab-tycoon/)** — or deeplink an episode: [Episode 0 — The Trade](https://timhwang.github.io/frontier-lab-tycoon/?ep=0) · [Episode 1 — The Long Year](https://timhwang.github.io/frontier-lab-tycoon/?ep=1) · [Episode 2 — Other People's Money](https://timhwang.github.io/frontier-lab-tycoon/?ep=2)
 
 ## Episode 0 — The Trade
 
@@ -31,6 +31,16 @@ Everything Episode 0 taught, for 52 weeks — and one ship won't hold the fronti
 - **Leases.** Grow the fleet — but the market is thin: each additional concurrent 5,000-GPU block costs more ($60M + $2.75M/wk up to $170M + $5.8M/wk), 6-week lead, 26-week terms, chosen at signing to arrive on inference or training. The lab starts with $500M and loses money; cash is a real clock.
 - **Faster rivals**, and a saturating ~45T addressable market — a bigger fleet buys genuine training headroom.
 - Mercy where friction demands it: only severe under-service (>110% utilization) ticks the 6-week collapse fuse.
+
+## Episode 2 — Other People's Money
+
+Episode 1 plus the money game, against the fiercest rivals (difficulty scales each episode):
+
+- **You set the price.** One product, one slider: cheap grows the market, pricey milks it. The margin is thin — you can't out-earn the early burn at any price.
+- **The GPU spot market.** Lease pricing rides a market index (×0.55–1.9) with occasional hard gaps — fee and rate are multiplied at signing and locked for the term. Steal a dip or get burned at a spike.
+- **Fundraising.** Opens only on KPIs (demand ≥ 14T, capability gap ≥ −12, 12-week cooldown); terms track demand, lead, growth, and recent ships. The lab starts with $400M and a structural burn: raise or die.
+
+Also in Episode 1+: allocation friction is asymmetric — standing up training pods is slow (~8%/wk), draining them back to serving is fast (~25%/wk).
 
 Each episode has its own skippable tutorial on first play.
 
