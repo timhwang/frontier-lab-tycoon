@@ -328,6 +328,7 @@
         <div class="body">
           <table id="rivals">
             <tr><th style="text-align:left;color:var(--dim);font-size:10px;">LAB</th>
+                <th style="text-align:left;color:var(--dim);font-size:10px;">MODEL</th>
                 <th style="text-align:right;color:var(--dim);font-size:10px;" title="Abstract frontier-capability index (think blended evals + vibes).">CAPABILITY</th>
                 <th class="ep2-only" style="text-align:right;color:var(--dim);font-size:10px;" title="Blended $/Mtok. Customers weigh capability against price — value = capability − 3×price.">PRICE</th>
                 <th style="text-align:right;color:var(--dim);font-size:10px;">Δ vs YOU</th>
@@ -456,9 +457,9 @@ function initState(){ return {
   lastNet: 0, lastGrowth: 0, lastRate: 0, lastServed: 0, lastCapacity: 0, lastOverflow: 0, lastRevenue: 0, lastChurn: 0,
   eventCooldown: 0,
   rivals: [
-    {name:'Menlo Research', q:60, price:3.6, demand:5, timer:20, lastShip:'—'},   // the leader charges for it
-    {name:'Axiom AI',       q:56, price:3.1, demand:3, timer:30, lastShip:'—'},
-    {name:'Tengri Compute', q:52, price:2.6, demand:2, timer:26, lastShip:'—'},   // the laggard competes on price
+    {name:'Menlo Research', model:'Cascade', ver:3, q:60, price:3.6, demand:5, timer:20, lastShip:'—'},   // the leader charges for it
+    {name:'Axiom AI',       model:'Theorem', ver:2, q:56, price:3.1, demand:3, timer:30, lastShip:'—'},
+    {name:'Tengri Compute', model:'Altai',   ver:1, q:52, price:2.6, demand:2, timer:26, lastShip:'—'},   // the laggard competes on price
   ],
   deliveries: MODE==='simple' ? {} :
               {20:{amt:6000,label:'Contracted H100e tranche energized'},
@@ -678,7 +679,8 @@ function tick(){
       const jump = S.mode==='simple' ? 5.5 : (S.mode==='ep2' ? 5 + rnd()*3.5 : 5 + rnd()*3);
       r.q += jump; r.timer = S.mode==='simple' ? 24 : (S.mode==='ep2' ? 20 + Math.floor(rnd()*8) : 22 + Math.floor(rnd()*8)); r.lastShip = 'W'+S.week;
       if(S.mode==='ep2') r.price = Math.min(6, +(r.price*1.08).toFixed(2));   // fresh models charge a premium
-      log('warn', r.name.toUpperCase()+' ships a new frontier model (capability '+r.q.toFixed(0)+').');
+      r.ver++;
+      log('warn', r.name.toUpperCase()+' ships '+r.model+'-'+r.ver+' (capability '+r.q.toFixed(0)+').');
       if(S.mode!=='simple') r.demand *= 1.12;                                // launch bump for them too
       if(r.q > S.quality){
         if(S.mode!=='simple') r.demand += S.demand*0.07;                     // your defectors land at their door
@@ -867,7 +869,7 @@ function runEvents(){
     const jump = S.mode==='simple' ? 4 + rnd()*3 : (S.mode==='ep2' ? 4 + rnd()*3.5 : 3.5 + rnd()*3.5);
     r.q += jump;
     S.eventCooldown = 3;
-    log('bad','⚠ RIVAL BREAKTHROUGH — '+r.name+' posts shock eval results: capability +'+jump.toFixed(1)+'. The frontier just moved.');
+    log('bad','⚠ RIVAL BREAKTHROUGH — '+r.model+'-'+r.ver+' ('+r.name+') posts shock eval results: capability +'+jump.toFixed(1)+'. The frontier just moved.');
   } else if(S.mode==='ep2' && roll < 0.22){
     const r = S.rivals[Math.floor(rnd()*S.rivals.length)];
     r.price = Math.max(1.6, +(r.price*(0.75 + rnd()*0.12)).toFixed(2));
@@ -1156,11 +1158,11 @@ function render(){
   const tbl = $('rivals');
   while(tbl.rows.length>1) tbl.deleteRow(1);
   const you = tbl.insertRow();
-  you.innerHTML = '<td style="color:var(--amber)">YOU — '+servingModel()+'</td><td class="num" style="color:var(--amber)">'+S.quality.toFixed(1)+'</td><td class="num ep2-only" style="color:var(--amber)">$'+S.price.toFixed(2)+'</td><td class="num">—</td><td class="num">'+(S.shipped?'W'+S.shipWeek:'launch')+'</td>';
+  you.innerHTML = '<td style="color:var(--amber)">YOU</td><td style="color:var(--amber)">'+servingModel()+'</td><td class="num" style="color:var(--amber)">'+S.quality.toFixed(1)+'</td><td class="num ep2-only" style="color:var(--amber)">$'+S.price.toFixed(2)+'</td><td class="num">—</td><td class="num">'+(S.shipped?'W'+S.shipWeek:'launch')+'</td>';
   S.rivals.slice().sort((a,b)=>b.q-a.q).forEach(r=>{
     const row = tbl.insertRow();
     const d = r.q - S.quality;
-    row.innerHTML = '<td>'+r.name+'</td><td class="num">'+r.q.toFixed(1)+'</td><td class="num ep2-only">$'+r.price.toFixed(2)+'</td><td class="num '+(d>0?'neg':'pos')+'">'+(d>0?'+':'')+d.toFixed(1)+'</td><td class="num dm">'+r.lastShip+'</td>';
+    row.innerHTML = '<td>'+r.name+'</td><td class="dm">'+r.model+'-'+r.ver+'</td><td class="num">'+r.q.toFixed(1)+'</td><td class="num ep2-only">$'+r.price.toFixed(2)+'</td><td class="num '+(d>0?'neg':'pos')+'">'+(d>0?'+':'')+d.toFixed(1)+'</td><td class="num dm">'+r.lastShip+'</td>';
   });
   $('obs-warn').textContent = S.obsStreak>0 ? '▲ OBSOLESCENCE CLOCK: '+S.obsStreak+'/'+OBS_WEEKS+' weeks more than '+OBS_LIMIT+' points behind' : '';
 
