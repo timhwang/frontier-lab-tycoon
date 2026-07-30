@@ -207,10 +207,12 @@
           <table>
             <tr><td class="lbl" title="Investors need a story: token demand of at least 12T/wk.">Demand ≥ 12T</td><td class="num" id="fr-kpi-dem"></td></tr>
             <tr><td class="lbl" title="…and a lab still on the frontier: no more than 12 capability points behind the leader.">Gap ≥ −12</td><td class="num" id="fr-kpi-gap"></td></tr>
-            <tr><td class="lbl" title="One round per 12 weeks — the market needs to forget your last pitch.">Cooldown</td><td class="num" id="fr-kpi-cd"></td></tr>
+            <tr><td class="lbl" title="One round per 12 weeks, none before W6 — investors want a quarter of data.">Cooldown</td><td class="num" id="fr-kpi-cd"></td></tr>
+            <tr><td class="lbl" title="Set by your numbers: demand, capability lead, growth, recent ships. Each round sells a slice of the company at this valuation — raise weak, sell cheap; raise hot, sell dear.">Valuation</td><td class="num" id="fr-val"></td></tr>
+            <tr><td class="lbl" title="What you still own. Your final score is multiplied by this — every round costs you forever. HOT markets take 12%, FAIR 15%, WARY (desperation) 20%.">Founder stake</td><td class="num" id="fr-own"></td></tr>
           </table>
           <button id="btn-raise" style="width:100%; margin-top:5px;" onclick="raiseRound()"></button>
-          <div class="dm" style="font-size:10px; margin-top:3px;">terms track demand, lead, growth, and recent ships</div>
+          <div class="dm" style="font-size:10px; margin-top:3px;">raising is always safe — but every slice is gone for good</div>
         </div>
       </div>
 
@@ -357,7 +359,7 @@
             <b>The frontier:</b> rivals improve every week and ship jumps; 15+ points behind for 6 straight weeks and you are acquired.<br><br>
             <b>Episode 0 (The Trade):</b> 26 weeks, run auto-started, flat +20 on ship, fixed fleet. Ship it, then hold service to the bell.<br><br>
             <b>Episode 1 (The Long Year):</b> 52 weeks; win by surviving to W52 — you will likely need TWO successful ships. Training compute idles until you START a run. The slider is a target with asymmetric friction: pods stand up to training slowly (~8%/wk) but drain to serving fast (~25%/wk); resizing a live run re-shards it (zero progress that week). The payoff is unknown until final evals: usually +15–24, sometimes a step change, sometimes a dud, rarely (~1 in 12) a total failure. Leases grow the fleet, but the market is thin — each additional concurrent block costs more ($60M+$2.75M/wk, then $110M+$4.2M/wk, then $170M+$5.8M/wk; 6-wk lead, 26-wk terms, max 15,000) — and cash is a real clock: $500M to start and the lab loses money.<br><br>
-            <b>Episode 2 (Other People's Money):</b> Episode 1 plus the money game, against the fiercest rivals. You set the product price, and demand follows <i>value for money</i>: capability − 3×price, versus the best rival offer — rivals price too, cutting when they trail and waging occasional price wars. Lease pricing rides a spot-market index (×0.55–1.9, applied to fee and rate at signing, locked per block). Fundraising unlocks on KPIs (demand ≥ 12T, gap ≥ −12, 12-wk cooldown) with terms that track demand, lead, growth, and recent ships. $400M to start; the burn is structural — raise or die.
+            <b>Episode 2 (Other People's Money):</b> Episode 1 plus the money game, against the fiercest rivals. You set the product price, and demand follows <i>value for money</i>: capability − 3×price, versus the best rival offer — rivals price too, cutting when they trail and waging occasional price wars. Lease pricing rides a spot-market index (×0.55–1.9, applied to fee and rate at signing, locked per block). Fundraising unlocks on KPIs (demand ≥ 12T, gap ≥ −12, 12-wk cooldown, nothing before W6); each round sells 12–20% of the company (HOT/FAIR/WARY) at a valuation set by your numbers, and your final score is multiplied by your remaining founder stake. $400M to start; the burn is structural — raise or die, but every slice is gone for good.
           </div>
         </details>
       </div>
@@ -428,7 +430,7 @@ function initState(){ return {
   week: 0, gameOver: false,
   cash: MODE==='simple' ? 1600 : (MODE==='ep2' ? 400 : 500),   // Ep.1 starts thin; Ep.2 starts thinner (fundraise or die)
   leaseMkt: 1.0,                            // Ep.2 GPU spot-market index
-  raises: 0, lastRaiseWeek: -99,
+  raises: 0, lastRaiseWeek: -99, ownership: 1.0,
   owned: 30000, leased: 0,                  // H100e
   leaseOrders: [],                          // {lead, amt}
   leases: [],                               // {amt, termLeft}
@@ -514,22 +516,26 @@ function absorbCapacity(amt, dest, fleetBefore){
   S.alloc.inf = 1 - S.alloc.train;
   renderAlloc();
 }
-// ---- Ep.2 fundraising: KPI-gated, terms track market performance ----
+// ---- Ep.2 fundraising: KPI-gated; each round sells a slice of the company at a
+// valuation set by your numbers — raise early and weak, sell cheap; raise hot, sell dear ----
 function fundOffer(){
   const best = Math.max(...S.rivals.map(r=>r.q));
   const lead = S.quality - best;
   const recentShip = S.shipped && (S.week - S.shipWeek) <= 10;
-  const kpi = {dem: S.demand >= 12, gap: lead >= -12, cd: (S.week - S.lastRaiseWeek) >= 12};
+  const kpi = {dem: S.demand >= 12, gap: lead >= -12, cd: (S.week - S.lastRaiseWeek) >= 12 && S.week >= 6};
   const eligible = S.mode==='ep2' && !S.gameOver && kpi.dem && kpi.gap && kpi.cd;
-  const amount = Math.round(clamp(S.demand*27 + clamp(lead,-10,30)*15 + (recentShip?150:0) + S.lastGrowth*3000, 150, 1500));
+  const valuation = Math.round(clamp(S.demand*180 + clamp(lead,-10,30)*100 + (recentShip?1000:0) + S.lastGrowth*20000, 1000, 11000));
   const mood = (lead>5 && S.lastGrowth>0.015) ? 'HOT' : (lead>=-5 ? 'FAIR' : 'WARY');
-  return {eligible, kpi, amount, mood};
+  const dilution = mood==='HOT' ? 0.12 : (mood==='FAIR' ? 0.15 : 0.20);
+  const amount = Math.round(Math.min(1500, valuation*0.15));
+  return {eligible, kpi, valuation, amount, dilution, mood};
 }
 function raiseRound(){
   const o = fundOffer();
   if(!o.eligible) return;
   S.cash += o.amount; S.raises++; S.lastRaiseWeek = S.week;
-  log('good','💰 ROUND CLOSED: +'+fmtM(o.amount)+' ('+o.mood+' market). The board gains a seat; the milestones gain teeth.');
+  S.ownership *= (1 - o.dilution);
+  log('good','💰 ROUND CLOSED: +'+fmtM(o.amount)+' at a '+fmtM(o.valuation)+' valuation ('+o.mood+' market, −'+Math.round(o.dilution*100)+'% of the company). Founder stake now '+Math.round(S.ownership*100)+'%.');
   render();
 }
 function startRun(){
@@ -841,10 +847,11 @@ function runEvents(){
 
 function endGame(won, title, body){
   S.gameOver = true; setSpeed(0);
-  const score = Math.round(S.cash/10 + S.demand*20 + S.quality*2 + S.ships*100 - S.raises*80);
+  const score = Math.round((S.cash/10 + S.demand*20 + S.quality*2 + S.ships*100) * S.ownership);
   $('ov-title').textContent = title;
   $('ov-restart').textContent = 'RESTART EPISODE '+(S.mode==='simple'?0:(S.mode==='ep2'?2:1));
-  $('ov-body').innerHTML = '<p>'+body+'</p><p class="dm">Week '+S.week+' · Cash '+fmtM(S.cash)+' · Demand '+fmtT(S.demand)+'/wk · Capability '+S.quality.toFixed(0)+' · Ships '+S.ships+'</p>';
+  const stake = S.mode==='ep2' ? ' · Founder stake '+Math.round(S.ownership*100)+'%' : '';
+  $('ov-body').innerHTML = '<p>'+body+'</p><p class="dm">Week '+S.week+' · Cash '+fmtM(S.cash)+' · Demand '+fmtT(S.demand)+'/wk · Capability '+S.quality.toFixed(0)+' · Ships '+S.ships+stake+'</p>';
   $('ov-score').textContent = won ? 'SCORE: '+score : '';
   $('ov-box').className = won ? 'box' : 'box lost';
   $('overlay').style.display = 'flex';
@@ -987,10 +994,15 @@ function render(){
     const chk = (el, ok, txt)=>{ $(el).textContent = txt; cls($(el), ok?'pos':'neg'); };
     chk('fr-kpi-dem', o.kpi.dem, o.kpi.dem?'✓ '+fmtT(S.demand):'✗ '+fmtT(S.demand));
     chk('fr-kpi-gap', o.kpi.gap, (o.kpi.gap?'✓ ':'✗ ')+(lead>=0?'+':'')+lead.toFixed(0));
-    const cdLeft = Math.max(0, 12-(S.week-S.lastRaiseWeek));
+    const cdLeft = Math.max(0, Math.max(12-(S.week-S.lastRaiseWeek), 6-S.week));
     chk('fr-kpi-cd', o.kpi.cd, o.kpi.cd?'✓ open':'✗ '+cdLeft+'wk');
+    $('fr-val').textContent = fmtM(o.valuation);
+    $('fr-own').textContent = Math.round(S.ownership*100)+'%';
+    cls($('fr-own'), S.ownership>0.7?'pos':(S.ownership>0.5?'wrn':'neg'));
     $('btn-raise').disabled = !o.eligible;
-    $('btn-raise').textContent = o.eligible ? '💰 RAISE '+fmtM(o.amount)+' — '+o.mood+' MARKET' : 'INVESTORS NOT INTERESTED';
+    $('btn-raise').textContent = o.eligible
+      ? '💰 RAISE '+fmtM(o.amount)+' for '+Math.round(o.dilution*100)+'% — '+o.mood+' MARKET'
+      : 'INVESTORS NOT INTERESTED';
   }
   $('f-owned').textContent = fmtK(S.owned);
   $('f-leased').textContent = fmtK(S.leased);
@@ -1238,8 +1250,8 @@ const TUT = {
       'Rivals fight back: fresh models charge premiums, trailing labs quietly cut, and <b>price wars</b> can vaporize your value lead overnight. Serving COGS is $0.80/Mtok — and no price out-earns the early burn. That is what investors are for.'},
     {t:'THE SPOT MARKET', h:'The <b>lease market index</b> (Fleet panel) drifts between ×0.55 and ×1.9 and occasionally gaps hard. Both the signing fee <b>and</b> the weekly rate are multiplied by it — and the rate you sign is <b>locked for the full 26-week term</b>.<br><br>'+
       'Lock blocks on dips and you steal capacity; panic-lease at a spike and you fund the provider\'s next datacenter.'},
-    {t:'RAISE OR DIE', h:'The <b>FUNDRAISING</b> panel opens only when the KPIs impress: <b>demand ≥ 12T</b>, <b>capability gap ≥ −12</b>, and a <b>12-week cooldown</b> since the last round. The offer tracks your demand, lead, growth, and recent ships — a <b>HOT</b> market pays much better than a <b>WARY</b> one.<br><br>'+
-      'Raise <i>before</i> you need it, while the story is good. The year usually takes two rounds. Good luck, CEO.'},
+    {t:'RAISE OR DIE', h:'The <b>FUNDRAISING</b> panel opens when the KPIs impress: <b>demand ≥ 12T</b>, <b>gap ≥ −12</b>, a <b>12-week cooldown</b> (and nothing before W6). Each round sells a <b>slice of the company</b> at a valuation set by your numbers — HOT markets take 12%, FAIR 15%, a WARY desperation round 20%.<br><br>'+
+      'Cash never kills you, but <b>your final score is multiplied by your founder stake</b> — so the art is timing: build the story, raise dear, and raise as rarely as you dare. The year usually takes two rounds. Good luck, CEO.'},
   ],
 };
 function tutKey(){ return S.mode==='simple' ? 'flt_tutorial_seen' : (S.mode==='ep2' ? 'flt_tut_ep2_seen' : 'flt_tut_ep1_seen'); }

@@ -38,7 +38,7 @@ Episode 1 plus the money game, against the fiercest rivals (difficulty scales ea
 
 - **You set the price.** One product, one slider: cheap grows the market, pricey milks it. The margin is thin — you can't out-earn the early burn at any price.
 - **The GPU spot market.** Lease pricing rides a market index (×0.55–1.9) with occasional hard gaps — fee and rate are multiplied at signing and locked for the term. Steal a dip or get burned at a spike.
-- **Fundraising.** Opens only on KPIs (demand ≥ 12T, capability gap ≥ −12, 12-week cooldown); terms track demand, lead, growth, and recent ships. The lab starts with $400M and a structural burn: raise or die.
+- **Fundraising.** Opens only on KPIs (demand ≥ 12T, capability gap ≥ −12, 12-week cooldown, nothing before W6). Each round sells 12–20% of the company at a valuation set by your numbers — raise weak, sell cheap; raise hot, sell dear — and your final score is multiplied by your remaining founder stake. The lab starts with $400M and a structural burn: raise or die, but every slice is gone for good.
 
 Also in Episode 1+: allocation friction is asymmetric — standing up training pods is slow (~8%/wk), draining them back to serving is fast (~25%/wk).
 
