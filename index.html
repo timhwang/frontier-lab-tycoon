@@ -200,12 +200,12 @@
           <canvas id="pipe-chart" class="spark full-only" style="height:44px"
             title="Known future capacity from now to year end: contracted deliveries step the blue (owned) area up; lease arrivals add to the amber band, lease expiries drop it."></canvas>
           <button id="btn-lease-inf" class="full-only" style="width:100%; margin-top:6px;" onclick="orderLease('inf')"
-            title="Order 5,000 leased H100e pointed at SERVING: $60M signing fee now, then $2.75M/wk for the 26-week term. 6-week lead. Arrives already on inference — no migration delay. Provider cap: 15,000 leased at once.">
+            title="Order 5,000 leased H100e pointed at SERVING. 6-week lead, 26-week term; arrives already on inference — no migration delay. The market is thin: each additional live block costs more ($60M+$2.75M/wk → $110M+$4.2M/wk → $170M+$5.8M/wk). Cap 15,000.">
             LEASE +5,000 → INFERENCE</button>
           <button id="btn-lease-train" class="full-only" style="width:100%; margin-top:4px;" onclick="orderLease('train')"
-            title="Order 5,000 leased H100e pointed at TRAINING: $60M signing fee now, then $2.75M/wk for the 26-week term. 6-week lead. Arrives already on training — no migration delay, but splicing new GPUs into a LIVE run re-shards it for a week.">
+            title="Order 5,000 leased H100e pointed at TRAINING. 6-week lead, 26-week term; arrives already on training — no migration delay, but splicing new GPUs into a LIVE run re-shards it for a week. The market is thin: each additional live block costs more ($60M+$2.75M/wk → $110M+$4.2M/wk → $170M+$5.8M/wk). Cap 15,000.">
             LEASE +5,000 → TRAINING</button>
-          <div class="dm full-only" style="font-size:10px; margin-top:3px;">$60M signing + $2.75M/wk per block · 6wk lead · 26wk term</div>
+          <div class="dm full-only" style="font-size:10px; margin-top:3px;">thin market: each additional block costs more · 6wk lead · 26wk term</div>
         </div>
       </div>
 
@@ -292,7 +292,7 @@
             <tr class="full-only"><td class="lbl" title="Non-GPU cost of serving: bandwidth, storage, support, trust &amp; safety. $0.80 per 1M tokens served.">Serving COGS</td><td class="num neg" id="fin-cogs"></td></tr>
             <tr class="full-only"><td class="lbl" title="600 researchers ×$650k/yr + 1,300 staff ×$400k/yr.">Payroll</td><td class="num neg" id="fin-pay"></td></tr>
             <tr class="full-only"><td class="lbl" title="$300/wk per owned H100e (power, cooling, DC staff, depreciation).">Datacenter opex</td><td class="num neg" id="fin-dc"></td></tr>
-            <tr class="full-only"><td class="lbl" title="$550/wk per leased H100e, plus $60M signing per block when ordered.">Cloud leases</td><td class="num neg" id="fin-lease"></td></tr>
+            <tr class="full-only"><td class="lbl" title="Sum of the weekly rates on active lease blocks ($2.75–5.8M/wk each, priced at signing). Signing fees hit cash directly in the week paid and are not shown here.">Cloud leases</td><td class="num neg" id="fin-lease"></td></tr>
             <tr class="full-only"><td class="lbl" title="Legal, safety evals, offices, everything else.">Other opex</td><td class="num neg" id="fin-other"></td></tr>
             <tr class="total"><td class="lbl">Net</td><td class="num" id="fin-net"></td></tr>
             <tr><td class="lbl">Cash</td><td class="num" id="fin-cash"></td></tr>
@@ -327,7 +327,7 @@
             <b>Serving:</b> above 97% utilization you rate-limit: growth penalized, 30% of unmet demand churns to rivals permanently (up to 65% during a launch surge — but a big crowd only drains ~12%/wk, so a large enough storm outlasts the clock no matter what). <b>The collapse clock: Episode 0 dies after 4 consecutive rate-limited weeks (&gt;97%); Episode 1 dies after 6 consecutive weeks of severe under-service (&gt;110%) — mild rate-limiting there is survivable, just costly.</b> Episode 1 demand also saturates toward a ~45T addressable market, so a bigger fleet buys real training headroom.<br><br>
             <b>The frontier:</b> rivals improve every week and ship jumps; 15+ points behind for 6 straight weeks and you are acquired.<br><br>
             <b>Episode 0 (The Trade):</b> 26 weeks, run auto-started, flat +20 on ship, fixed fleet. Ship it, then hold service to the bell.<br><br>
-            <b>Episode 1 (The Long Year):</b> 52 weeks; win by surviving to W52 — you will likely need TWO successful ships. Training compute idles until you START a run. The slider is a target: GPUs migrate ~6%/wk, and resizing a live run re-shards it (zero progress that week). The payoff is unknown until final evals: usually +15–24, sometimes a step change, sometimes a dud, rarely (~1 in 12) a total failure. Leases grow the fleet ($60M signing + $2.75M/wk per 5,000, 6-wk lead, max 15,000) — and cash is a real clock: the lab starts unprofitable.
+            <b>Episode 1 (The Long Year):</b> 52 weeks; win by surviving to W52 — you will likely need TWO successful ships. Training compute idles until you START a run. The slider is a target: GPUs migrate ~6%/wk, and resizing a live run re-shards it (zero progress that week). The payoff is unknown until final evals: usually +15–24, sometimes a step change, sometimes a dud, rarely (~1 in 12) a total failure. Leases grow the fleet, but the market is thin — each additional concurrent block costs more ($60M+$2.75M/wk, then $110M+$4.2M/wk, then $170M+$5.8M/wk; 6-wk lead, 26-wk terms, max 15,000) — and cash is a real clock: $500M to start and the lab loses money.
           </div>
         </details>
       </div>
@@ -370,12 +370,15 @@
 'use strict';
 // ============================================================ constants & state
 let MODE = 'simple';   // 'simple' = Episode 0 (The Trade), 'full' = Episode 1 (The Long Year)
-const LEASE_CAP = 15000, LEASE_FEE = 60, MIGRATE = 0.08;
+const LEASE_CAP = 15000, MIGRATE = 0.08;
+// lease market depth: each additional concurrent block is pricier (fee $M up front, rate $M/wk)
+const LEASE_TIERS = [{fee:60, wk:2.75}, {fee:110, wk:4.2}, {fee:170, wk:5.8}];
+function nextLeaseTier(){ return LEASE_TIERS[Math.min(LEASE_TIERS.length-1, Math.floor(leasedAndPending()/5000))]; }
 const OBS_LIMIT = 15, OBS_WEEKS = 6;
 function horizon(){ return S.mode==='simple' ? 26 : 52; }
 function runReq(){ return MODE==='simple' ? 220000 : 180000; }   // Ep.1 runs are leaner: ~3 attempts fit in a year
 function rlLimit(){ return S.mode==='simple' ? 4 : 6; }          // friction earns Ep.1 a longer collapse fuse
-function startCash(){ return S.mode==='simple' ? 1600 : 1000; }
+function startCash(){ return S.mode==='simple' ? 1600 : 500; }
 function marketCap(){ return S.mode==='simple' ? 28.5 : 45; }
 function surgeCap(){ return S.mode==='simple' ? 42 : 70; }
 function rlThresh(){ return S.mode==='simple' ? 0.97 : 1.10; }   // Ep.1: only SEVERE under-service ticks the death clock
@@ -383,7 +386,7 @@ function rlThresh(){ return S.mode==='simple' ? 0.97 : 1.10; }   // Ep.1: only S
 function initState(){ return {
   mode: MODE,
   week: 0, gameOver: false,
-  cash: MODE==='simple' ? 1600 : 1000,      // $M
+  cash: MODE==='simple' ? 1600 : 500,       // $M — Ep.1 starts thin: three lease fees is most of the treasury
   owned: 30000, leased: 0,                  // H100e
   leaseOrders: [],                          // {lead, amt}
   leases: [],                               // {amt, termLeft}
@@ -450,9 +453,11 @@ function orderLease(dest){
     log('warn','Cloud provider: "No H100 capacity available this quarter." Lease market is sold out (cap 15,000).');
     render(); return;
   }
-  S.cash -= LEASE_FEE;
-  S.leaseOrders.push({lead:6, amt:5000, dest});
-  log('info','Lease signed: −$'+LEASE_FEE+'M fee now, +5,000 H100e live in 6 weeks → '+(dest==='train'?'TRAINING':'INFERENCE')+' ($2.75M/wk, 26-wk term).');
+  const t = nextLeaseTier();
+  if(S.cash < t.fee){ log('warn','CFO: "We do not have $'+t.fee+'M for the signing fee."'); render(); return; }
+  S.cash -= t.fee;
+  S.leaseOrders.push({lead:6, amt:5000, dest, rate:t.wk});
+  log('info','Lease signed: −$'+t.fee+'M fee now, +5,000 H100e live in 6 weeks → '+(dest==='train'?'TRAINING':'INFERENCE')+' ($'+t.wk+'M/wk, 26-wk term).');
   render();
 }
 // fold newly-arrived capacity straight into its destination job: both the actual split and the
@@ -541,7 +546,7 @@ function tick(){
   S.leaseOrders.forEach(o=>o.lead--);
   S.leaseOrders.filter(o=>o.lead<=0).forEach(o=>{
     const before = S.owned + S.leases.reduce((a,l)=>a+l.amt,0);
-    S.leases.push({amt:o.amt, termLeft:26});
+    S.leases.push({amt:o.amt, termLeft:26, rate:o.rate});
     absorbCapacity(o.amt, o.dest, before);
     log('good','Leased capacity live: +'+fmtK(o.amt)+' H100e → '+(o.dest==='train'?'TRAINING':'INFERENCE')+'.');
   });
@@ -641,7 +646,7 @@ function tick(){
   // -------- costs
   const payroll = (S.researchers*0.65 + S.staff*0.40)/52;
   const dc = S.owned*0.0003;
-  const leaseCost = S.leased*0.00055;
+  const leaseCost = S.leases.reduce((a,l)=>a+l.rate, 0);
   const cogs = served*0.8;            // non-GPU serving costs: bandwidth, storage, support, trust&safety
   const other = S.mode==='simple' ? 14 : 20;
   const net = revenue - payroll - dc - leaseCost - cogs - other;
@@ -863,10 +868,11 @@ function render(){
     : (migrating ? '⇄ ~'+migWeeks+'wk to target'+(S.runActive?' — run stalled while resizing':'') : '');
 
   // fleet
-  const soldOut = leasedAndPending() + 5000 > LEASE_CAP, broke = S.cash < LEASE_FEE;
-  [['btn-lease-inf','LEASE +5,000 → INFERENCE'],['btn-lease-train','LEASE +5,000 → TRAINING']].forEach(([id, lbl])=>{
+  const tier = nextLeaseTier();
+  const soldOut = leasedAndPending() + 5000 > LEASE_CAP, broke = S.cash < tier.fee;
+  [['btn-lease-inf','+5,000 → INFERENCE'],['btn-lease-train','+5,000 → TRAINING']].forEach(([id, lbl])=>{
     $(id).disabled = soldOut || broke;
-    $(id).textContent = soldOut ? 'LEASE MARKET SOLD OUT' : lbl;
+    $(id).textContent = soldOut ? 'LEASE MARKET SOLD OUT' : 'LEASE '+lbl+' ($'+tier.fee+'M + $'+tier.wk+'M/wk)';
   });
   $('f-owned').textContent = fmtK(S.owned);
   $('f-leased').textContent = fmtK(S.leased);
@@ -973,7 +979,7 @@ function render(){
   $('fin-cogs').textContent = '−'+fmtM(S.lastServed*0.8);
   $('fin-pay').textContent = '−'+fmtM(payroll);
   $('fin-dc').textContent = '−'+fmtM(S.owned*0.0003);
-  $('fin-lease').textContent = S.leased>0 ? '−'+fmtM(S.leased*0.00055) : '$0.0M';
+  $('fin-lease').textContent = S.leased>0 ? '−'+fmtM(S.leases.reduce((a,l)=>a+l.rate,0)) : '$0.0M';
   $('fin-other').textContent = '−'+fmtM(S.mode==='simple' ? 14 : 20);
   $('fin-net').textContent = (S.lastNet>=0?'+':'')+fmtM(S.lastNet);
   cls($('fin-net'), S.lastNet>=0?'pos':'neg');
@@ -1037,7 +1043,7 @@ function resetGame(){
     log('sys','FRONTIER LAB TYCOON — EPISODE 1: THE LONG YEAR');
     log('sys','52 weeks. Rivals are faster now, and one ship will not hold the frontier — plan for two. Training compute idles until you START a run; final evals decide what each run is worth.');
     log('info','The slider is a target: GPUs migrate ~8%/wk, and resizing a live run re-shards it (zero progress that week). Set the split, let it settle, then kick off.');
-    log('info','The lab starts unprofitable. Leases can grow the fleet ($60M + $2.75M/wk per 5,000) — and can bankrupt you. Same three death clocks: cash, frontier gap, rate limits.');
+    log('info','The lab starts unprofitable, with $500M in the bank. Leases can grow the fleet — but the market is thin: each additional block costs more, and the fees alone can sink you. Same three death clocks: cash, frontier gap, rate limits.');
   }
   render();
   setSpeed(0);
@@ -1096,8 +1102,8 @@ const TUT = {
     {t:'EVALS ARE A ROULETTE', h:'No more guaranteed +20. A run\'s payoff is unknown until final evals:<br><br>'+
       '~60%: <b>solid</b> (+15–24) · ~15%: <b class="pos">step change</b> (+27–35)<br>~17%: <b>dud</b> (+3–7, tiny launch) · ~8%: <b class="neg">total failure</b> — nothing ships, the compute is simply gone.<br><br>'+
       'A failed or flat run is not the end — it is the signal to start the next one <i>immediately</i>.'},
-    {t:'LEASES & SOLVENCY', h:'The fleet can grow now: <b>LEASE +5,000 H100e</b> costs <b>$60M up front</b> plus $2.75M/wk for a 26-week term (6-week lead, market cap 15,000). You choose at signing whether a block arrives pointed at <b>INFERENCE or TRAINING</b> — no migration delay either way, though splicing fresh GPUs into a live run still re-shards it for a week. Owned tranches also arrive W20 and W40 (pointed at inference).<br><br>'+
-      'But the lab <b>starts unprofitable</b> and cash is a real clock. Lease ahead of demand and you print money; lease into a dud and you die of payroll. Good luck, CEO.'},
+    {t:'LEASES & SOLVENCY', h:'The fleet can grow now — but the lease market is <b>thin</b>: the first 5,000-GPU block costs <b>$60M + $2.75M/wk</b>, the second <b>$110M + $4.2M/wk</b>, the third <b>$170M + $5.8M/wk</b> (6-week lead, 26-week terms). You choose at signing whether a block arrives pointed at <b>INFERENCE or TRAINING</b> — no migration delay either way, though splicing fresh GPUs into a live run re-shards it for a week. Owned tranches also arrive W20 and W40.<br><br>'+
+      'You start with <b>$500M</b> and the lab <b>loses money</b> — three signing fees is most of the treasury. Lease into demand you can fill and it pays; lease into a dud and you die of payroll. Good luck, CEO.'},
   ],
 };
 function tutKey(){ return S.mode==='simple' ? 'flt_tutorial_seen' : 'flt_tut_ep1_seen'; }

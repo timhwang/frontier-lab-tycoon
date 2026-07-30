@@ -28,7 +28,7 @@ Everything Episode 0 taught, for 52 weeks — and one ship won't hold the fronti
 - **Runs start when you say so.** Training compute idles until you press START PRETRAINING RUN. Each run consumes 180k H100e-weeks.
 - **Friction.** The slider is a target: GPUs migrate ~8% of the fleet per week, and resizing a *live* run re-shards it — zero progress any week its allocation is changing.
 - **Evals are a roulette.** ~60% solid (+15–24), ~15% step change, ~17% dud, ~8% total failure — the compute is simply gone.
-- **Leases.** Grow the fleet: $60M signing + $2.75M/wk per 5,000 H100e block, 6-week lead, 26-week term. The lab starts unprofitable; cash is a real clock.
+- **Leases.** Grow the fleet — but the market is thin: each additional concurrent 5,000-GPU block costs more ($60M + $2.75M/wk up to $170M + $5.8M/wk), 6-week lead, 26-week terms, chosen at signing to arrive on inference or training. The lab starts with $500M and loses money; cash is a real clock.
 - **Faster rivals**, and a saturating ~45T addressable market — a bigger fleet buys genuine training headroom.
 - Mercy where friction demands it: only severe under-service (>110% utilization) ticks the 6-week collapse fuse.
 
